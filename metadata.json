@@ -1,0 +1,6 @@
+{
+  "name": "Shine Group Jobs - Recruitment & Placement Portal",
+  "description": "Full-stack job recruitment and placement portal featuring dynamic job browsing, dedicated Admin Control Panel for verified vacancy posting, candidate tracking, and user authentication.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
