@@ -40,6 +40,13 @@ import {
 } from 'lucide-react';
 import { Job, JobApplication, User, WebsiteSettings, UploadedResumeFile } from '../types.js';
 import { EditJobModal } from './EditJobModal.js';
+import { 
+  getStoredUsers, 
+  setLocalJobStatus, 
+  deleteLocalJob, 
+  updateLocalApplicationStatus, 
+  saveStoredSettings 
+} from '../utils/localPersistence.js';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -123,15 +130,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           'Authorization': 'Bearer admin-token'
         }
       });
-      const data = await res.json();
-      if (data.success && Array.isArray(data.users)) {
-        setRegisteredUsers(data.users);
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.users)) {
+          setRegisteredUsers(data.users);
+          setUsersLoading(false);
+          return;
+        }
       }
     } catch (e) {
-      console.error('Failed to load users:', e);
-    } finally {
-      setUsersLoading(false);
+      console.warn('Failed to load users from API, loading local users:', e);
     }
+    // Netlify static fallback
+    const localUsers = getStoredUsers().map(u => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      phone: u.phone
+    }));
+    setRegisteredUsers(localUsers);
+    setUsersLoading(false);
   };
 
   useEffect(() => {
@@ -258,17 +278,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         body: JSON.stringify({ status: newStatus })
       });
-      const data = await res.json();
-      if (data.success) {
-        setFeedbackMessage(`Job '${job.title}' marked as ${newStatus}`);
-        onRefreshJobs();
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        await res.json();
       }
     } catch (err) {
-      console.error(err);
-    } finally {
-      setActionLoadingId(null);
-      setTimeout(() => setFeedbackMessage(null), 4000);
+      console.warn('Backend job status update failed, saving locally:', err);
     }
+    setLocalJobStatus(job.id, newStatus);
+    setFeedbackMessage(`Job '${job.title}' marked as ${newStatus}`);
+    onRefreshJobs();
+    setActionLoadingId(null);
+    setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
   // Delete Job
@@ -285,17 +306,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           'Authorization': 'Bearer admin-token'
         }
       });
-      const data = await res.json();
-      if (data.success) {
-        setFeedbackMessage(`Job removed from portal.`);
-        onRefreshJobs();
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        await res.json();
       }
     } catch (err) {
-      console.error(err);
-    } finally {
-      setActionLoadingId(null);
-      setTimeout(() => setFeedbackMessage(null), 4000);
+      console.warn('Backend job delete failed, saving locally:', err);
     }
+    deleteLocalJob(job.id);
+    setFeedbackMessage(`Job removed from portal.`);
+    onRefreshJobs();
+    setActionLoadingId(null);
+    setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
   // Update Application Status
@@ -311,17 +333,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         body: JSON.stringify({ status: newStatus })
       });
-      const data = await res.json();
-      if (data.success) {
-        setFeedbackMessage(`Candidate status updated: ${newStatus}`);
-        onRefreshApplications();
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        await res.json();
       }
     } catch (err) {
-      console.error(err);
-    } finally {
-      setActionLoadingId(null);
-      setTimeout(() => setFeedbackMessage(null), 4000);
+      console.warn('Backend app status update failed, saving locally:', err);
     }
+    updateLocalApplicationStatus(appId, newStatus);
+    setFeedbackMessage(`Candidate status updated: ${newStatus}`);
+    onRefreshApplications();
+    setActionLoadingId(null);
+    setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
   // Delete User Account
@@ -338,19 +361,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           'Authorization': 'Bearer admin-token'
         }
       });
-      const data = await res.json();
-      if (data.success) {
-        setFeedbackMessage(`User account removed.`);
-        fetchUsers();
-      } else {
-        alert(data.message || 'Could not delete user.');
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        await res.json();
       }
     } catch (err) {
-      console.error(err);
-    } finally {
-      setActionLoadingId(null);
-      setTimeout(() => setFeedbackMessage(null), 4000);
+      console.warn('Backend user delete failed:', err);
     }
+    try {
+      const raw = localStorage.getItem('shine_registered_users');
+      if (raw) {
+        const list = JSON.parse(raw);
+        localStorage.setItem('shine_registered_users', JSON.stringify(list.filter((u: any) => u.id !== userId)));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setFeedbackMessage(`User account removed.`);
+    fetchUsers();
+    setActionLoadingId(null);
+    setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
   // Save Website CMS Settings (Website Update)
@@ -367,17 +397,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         body: JSON.stringify(cmsSettings)
       });
-      const data = await res.json();
-      if (data.success) {
-        setFeedbackMessage('Website settings & announcement notice updated live!');
-        onRefreshSettings();
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        await res.json();
       }
     } catch (err) {
-      console.error(err);
-    } finally {
-      setCmsSaving(false);
-      setTimeout(() => setFeedbackMessage(null), 4000);
+      console.warn('Backend settings update failed, saving locally:', err);
     }
+    saveStoredSettings(cmsSettings);
+    setFeedbackMessage('Website settings & announcement notice updated live!');
+    onRefreshSettings();
+    setCmsSaving(false);
+    setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
   return (

@@ -21,6 +21,7 @@ import {
   Check
 } from 'lucide-react';
 import { Job, JobApplication, User as UserType, UploadedResumeFile } from '../types.js';
+import { saveLocalApplication } from '../utils/localPersistence.js';
 
 interface ApplyModalProps {
   job: Job | null;
@@ -173,23 +174,39 @@ export const ApplyModal: React.FC<ApplyModalProps> = ({
         resumeFile: resumeFile || undefined
       };
 
-      const res = await fetch(`/api/jobs/${job.id}/apply`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+      let submittedApp: JobApplication | null = null;
 
-      const data = await res.json();
+      try {
+        const res = await fetch(`/api/jobs/${job.id}/apply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-      if (data.success && data.application) {
-        setSubmittedApp(data.application);
-        onApplicationSuccess(data.application);
-      } else {
-        setErrorMsg(data.message || 'Failed to submit application. Please try again.');
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data.success && data.application) {
+            submittedApp = data.application;
+          }
+        }
+      } catch (networkErr) {
+        console.warn('Backend server not reachable for application submit, using local storage fallback:', networkErr);
       }
+
+      // If backend was not running (Netlify static host), save application locally
+      if (!submittedApp) {
+        submittedApp = saveLocalApplication(job, payload);
+      }
+
+      setSubmittedApp(submittedApp);
+      onApplicationSuccess(submittedApp);
     } catch (err) {
       console.error('Application submission error:', err);
-      setErrorMsg('Network error occurred. Please check your connection.');
+      // Even on error, ensure candidate application is saved locally
+      const fallbackApp = saveLocalApplication(job, formData);
+      setSubmittedApp(fallbackApp);
+      onApplicationSuccess(fallbackApp);
     } finally {
       setLoading(false);
     }

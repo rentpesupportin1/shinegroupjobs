@@ -13,6 +13,7 @@ import {
   Shield
 } from 'lucide-react';
 import { User, UserRole } from '../types.js';
+import { offlineAuthLogin, offlineAuthRegister } from '../utils/localPersistence.js';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -52,25 +53,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       ? { name, email, password, phone, role: activeTab, adminPasscode }
       : { email, password, role: activeTab };
 
+    let authResponse: { success: boolean; user?: User; message?: string } | null = null;
+
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
-
-      if (data.success && data.user) {
-        onLoginSuccess(data.user);
-        onClose();
-      } else {
-        setError(data.message || 'Authentication failed. Check your details.');
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        authResponse = data;
       }
-    } catch (err) {
-      setError('Network communication failed. Please try again.');
-    } finally {
-      setLoading(false);
+    } catch (networkErr) {
+      // Backend not running (Netlify static deployment or offline)
+      console.warn('Backend server not reachable, switching to client auth fallback:', networkErr);
     }
+
+    // If server was not reachable or returned non-JSON / 404 (Netlify static host)
+    if (!authResponse) {
+      if (isRegister) {
+        authResponse = offlineAuthRegister(name, email, password, phone, activeTab, adminPasscode);
+      } else {
+        authResponse = offlineAuthLogin(email, password, activeTab);
+      }
+    }
+
+    if (authResponse && authResponse.success && authResponse.user) {
+      onLoginSuccess(authResponse.user);
+      onClose();
+    } else {
+      setError(authResponse?.message || 'Authentication failed. Please check your credentials.');
+    }
+    setLoading(false);
   };
 
   return (

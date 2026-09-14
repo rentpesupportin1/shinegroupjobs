@@ -15,6 +15,12 @@ import { AIResumeMatcherModal } from './components/AIResumeMatcherModal.js';
 import { AuthModal } from './components/AuthModal.js';
 import { Job, JobApplication, User, WebsiteSettings } from './types.js';
 import { initialJobs, initialApplications } from './data/initialJobs.js';
+import { 
+  getStoredJobs, 
+  getStoredApplications, 
+  getStoredSettings, 
+  deleteLocalJob 
+} from './utils/localPersistence.js';
 import { MessageCircle, Bell } from 'lucide-react';
 
 const defaultSettings: WebsiteSettings = {
@@ -107,52 +113,64 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Fetch initial jobs from backend API
+  // Fetch initial jobs from backend API or local storage
   const fetchJobs = async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/jobs');
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.jobs && Array.isArray(data.jobs)) {
           setJobs(data.jobs);
+          return;
         }
       }
     } catch (err) {
-      console.warn('Could not fetch from backend API, using local fallback state:', err);
+      console.warn('Could not fetch from backend API, using local storage state:', err);
     } finally {
       setLoading(false);
     }
+    // Static / Netlify fallback
+    setJobs(getStoredJobs());
   };
 
-  // Fetch applications from backend API
+  // Fetch applications from backend API or local storage
   const fetchApplications = async () => {
     try {
       const res = await fetch('/api/applications');
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.applications && Array.isArray(data.applications)) {
           setApplications(data.applications);
+          return;
         }
       }
     } catch (err) {
-      console.warn('Could not fetch applications, using local fallback state:', err);
+      console.warn('Could not fetch applications, using local storage state:', err);
     }
+    // Static / Netlify fallback
+    setApplications(getStoredApplications());
   };
 
   // Fetch website CMS settings
   const fetchSettings = async () => {
     try {
       const res = await fetch('/api/site-settings');
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.settings) {
           setWebsiteSettings(data.settings);
+          return;
         }
       }
     } catch (err) {
       console.warn('Could not fetch site settings:', err);
     }
+    // Static / Netlify fallback
+    setWebsiteSettings(getStoredSettings());
   };
 
   useEffect(() => {
@@ -335,17 +353,19 @@ export default function App() {
           'Authorization': 'Bearer admin-token'
         }
       });
-      const data = await res.json();
-      if (data.success) {
-        setJobs(prev => prev.filter(j => j.id !== jobId));
-      } else {
-        alert(data.message || 'Could not delete job.');
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        if (!data.success) {
+          alert(data.message || 'Could not delete job.');
+          return;
+        }
       }
     } catch (e) {
-      console.error(e);
-      // local fallback
-      setJobs(prev => prev.filter(j => j.id !== jobId));
+      console.warn('Backend DELETE error, using local fallback:', e);
     }
+    deleteLocalJob(jobId);
+    setJobs(prev => prev.filter(j => j.id !== jobId));
   };
 
   const handleHeroSearch = (query: string, category: string, workMode: string) => {
