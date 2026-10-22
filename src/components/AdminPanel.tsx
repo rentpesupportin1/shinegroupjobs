@@ -36,16 +36,29 @@ import {
   Download,
   FileArchive,
   Image as ImageIcon,
-  X
+  X,
+  Award,
+  Printer,
+  QrCode,
+  Copy,
+  Check
 } from 'lucide-react';
-import { Job, JobApplication, User, WebsiteSettings, UploadedResumeFile } from '../types.js';
+import { Job, JobApplication, User, WebsiteSettings, UploadedResumeFile, CandidateCertificate, CertificateStatus, CertificateType } from '../types.js';
 import { EditJobModal } from './EditJobModal.js';
+import { CertificateModal } from './CertificateModal.js';
 import { 
   getStoredUsers, 
   setLocalJobStatus, 
   deleteLocalJob, 
   updateLocalApplicationStatus, 
-  saveStoredSettings 
+  saveStoredSettings,
+  getStoredCertificates,
+  approveCertificate,
+  rejectCertificate,
+  adminDirectIssueCertificate,
+  deleteLocalCertificate,
+  deleteLocalUser,
+  deleteLocalApplication
 } from '../utils/localPersistence.js';
 
 interface AdminPanelProps {
@@ -61,6 +74,7 @@ interface AdminPanelProps {
   onRefreshApplications: () => void;
   onRefreshSettings: () => void;
   onSelectJob: (job: Job) => void;
+  onDeleteJob?: (jobId: string) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -75,10 +89,47 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onRefreshJobs,
   onRefreshApplications,
   onRefreshSettings,
-  onSelectJob
+  onSelectJob,
+  onDeleteJob
 }) => {
-  type AdminTab = 'dashboard' | 'jobs' | 'applications' | 'users' | 'settings';
+  type AdminTab = 'dashboard' | 'jobs' | 'applications' | 'users' | 'certificates' | 'settings';
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+
+  // Certificates Management State
+  const [certificates, setCertificates] = useState<CandidateCertificate[]>(() => getStoredCertificates());
+  const [certSearch, setCertSearch] = useState('');
+  const [certStatusFilter, setCertStatusFilter] = useState('all');
+  const [selectedCertForPrint, setSelectedCertForPrint] = useState<CandidateCertificate | null>(null);
+  
+  // Review & Approval Modal state
+  const [reviewingCert, setReviewingCert] = useState<CandidateCertificate | null>(null);
+  const [approvalForm, setApprovalForm] = useState({
+    certificateNumber: '',
+    issueDate: '',
+    grade: 'Grade A+ (Distinction)',
+    approvedBy: 'Director, Shine Group Jobs Placement Desk',
+    signatoryTitle: 'Authorized Signatory • Jabalpur Office',
+    adminRemarks: ''
+  });
+
+  // Rejection modal state
+  const [rejectingCert, setRejectingCert] = useState<CandidateCertificate | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('Record verification details could not be validated by administration.');
+
+  // Direct Issue Certificate Modal state
+  const [isDirectIssueOpen, setIsDirectIssueOpen] = useState(false);
+  const [directIssueForm, setDirectIssueForm] = useState({
+    candidateName: '',
+    fatherName: '',
+    candidateEmail: '',
+    candidatePhone: '',
+    certificateType: 'Training & Skill Completion' as CertificateType,
+    courseOrRole: 'Advanced Office Operations & Data Management',
+    duration: '3 Months (June 2026 - August 2026)',
+    grade: 'Grade A+ (Distinction)',
+    certificateNumber: '',
+    adminRemarks: 'Directly verified and issued by Shine Group Administration.'
+  });
 
   // Job Search & Filtering
   const [jobSearch, setJobSearch] = useState('');
@@ -89,14 +140,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [appSearch, setAppSearch] = useState('');
   const [appStatusFilter, setAppStatusFilter] = useState('all');
 
-  // Resume Document Viewer Modal State
-  const [selectedResume, setSelectedResume] = useState<{
-    file: UploadedResumeFile;
-    candidateName: string;
-    jobTitle: string;
-    email?: string;
-    phone?: string;
-  } | null>(null);
+  // Resume Document Viewer Modal State (Supports full candidate application & attached documents)
+  const [selectedResumeApp, setSelectedResumeApp] = useState<JobApplication | null>(null);
 
   // Registered Users State
   const [registeredUsers, setRegisteredUsers] = useState<Array<{ id: string; name: string; email: string; role: string; phone: string }>>([]);
@@ -107,6 +152,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [jobToEdit, setJobToEdit] = useState<Job | null>(null);
   const [isEditJobModalOpen, setIsEditJobModalOpen] = useState(false);
 
+
   // Website Settings Form state
   const [cmsSettings, setCmsSettings] = useState<WebsiteSettings>(websiteSettings);
   const [cmsSaving, setCmsSaving] = useState(false);
@@ -114,6 +160,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Feedback notifications
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  // In-App Confirmation Modal state (prevents iframe popup blocking)
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    itemName?: string;
+    confirmLabel?: string;
+    onConfirm: () => void | Promise<void>;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   // Sync cmsSettings when props update
   useEffect(() => {
@@ -292,32 +353,37 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
-  // Delete Job
-  const handleDeleteJob = async (job: Job) => {
-    if (!window.confirm(`Delete job opening: '${job.title}'? This action cannot be undone.`)) {
-      return;
-    }
-    setActionLoadingId(job.id);
-    try {
-      const res = await fetch(`/api/jobs/${job.id}`, {
-        method: 'DELETE',
-        headers: {
-          'x-user-role': 'admin',
-          'Authorization': 'Bearer admin-token'
+  // Delete Job (Safe In-App Modal)
+  const handleDeleteJob = (job: Job) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Job Vacancy',
+      message: 'Are you sure you want to delete this job vacancy? It will be permanently removed from all listings on the portal.',
+      itemName: `${job.title} • ${job.company}`,
+      confirmLabel: 'Delete Vacancy',
+      onConfirm: async () => {
+        setActionLoadingId(job.id);
+        deleteLocalJob(job.id);
+        if (onDeleteJob) {
+          onDeleteJob(job.id);
         }
-      });
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        await res.json();
+        setFeedbackMessage(`Job opening '${job.title}' deleted successfully.`);
+        try {
+          await fetch(`/api/jobs/${job.id}`, {
+            method: 'DELETE',
+            headers: {
+              'x-user-role': 'admin',
+              'Authorization': 'Bearer admin-token'
+            }
+          });
+        } catch (err) {
+          console.warn('Backend job delete sync failed, removed locally:', err);
+        }
+        onRefreshJobs();
+        setActionLoadingId(null);
+        setTimeout(() => setFeedbackMessage(null), 4000);
       }
-    } catch (err) {
-      console.warn('Backend job delete failed, saving locally:', err);
-    }
-    deleteLocalJob(job.id);
-    setFeedbackMessage(`Job removed from portal.`);
-    onRefreshJobs();
-    setActionLoadingId(null);
-    setTimeout(() => setFeedbackMessage(null), 4000);
+    });
   };
 
   // Update Application Status
@@ -347,40 +413,65 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
-  // Delete User Account
-  const handleDeleteUser = async (userId: string, userName: string) => {
-    if (!window.confirm(`Delete registered user account '${userName}'?`)) {
-      return;
-    }
-    setActionLoadingId(userId);
-    try {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: {
-          'x-user-role': 'admin',
-          'Authorization': 'Bearer admin-token'
+  // Delete User Account (Safe In-App Modal)
+  const handleDeleteUser = (userId: string, userName: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Registered User',
+      message: 'Are you sure you want to permanently remove this registered user account? The candidate will no longer be able to log in.',
+      itemName: userName,
+      confirmLabel: 'Delete User Account',
+      onConfirm: async () => {
+        setActionLoadingId(userId);
+        deleteLocalUser(userId);
+        setRegisteredUsers(prev => prev.filter(u => u.id !== userId));
+        setFeedbackMessage(`User account '${userName}' removed successfully.`);
+        try {
+          await fetch(`/api/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: {
+              'x-user-role': 'admin',
+              'Authorization': 'Bearer admin-token'
+            }
+          });
+        } catch (err) {
+          console.warn('Backend user delete sync failed, removed locally:', err);
         }
-      });
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        await res.json();
+        fetchUsers();
+        setActionLoadingId(null);
+        setTimeout(() => setFeedbackMessage(null), 4000);
       }
-    } catch (err) {
-      console.warn('Backend user delete failed:', err);
-    }
-    try {
-      const raw = localStorage.getItem('shine_registered_users');
-      if (raw) {
-        const list = JSON.parse(raw);
-        localStorage.setItem('shine_registered_users', JSON.stringify(list.filter((u: any) => u.id !== userId)));
+    });
+  };
+
+  // Delete Candidate Job Application (Safe In-App Modal)
+  const handleDeleteApplication = (appId: string, candidateName: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Candidate Application',
+      message: 'Are you sure you want to remove this job application? This candidate submission will be permanently deleted.',
+      itemName: candidateName,
+      confirmLabel: 'Delete Application',
+      onConfirm: async () => {
+        setActionLoadingId(appId);
+        deleteLocalApplication(appId);
+        setFeedbackMessage(`Application for '${candidateName}' deleted successfully.`);
+        try {
+          await fetch(`/api/applications/${appId}`, {
+            method: 'DELETE',
+            headers: {
+              'x-user-role': 'admin',
+              'Authorization': 'Bearer admin-token'
+            }
+          });
+        } catch (err) {
+          console.warn('Backend application delete sync failed, removed locally:', err);
+        }
+        onRefreshApplications();
+        setActionLoadingId(null);
+        setTimeout(() => setFeedbackMessage(null), 4000);
       }
-    } catch (e) {
-      console.error(e);
-    }
-    setFeedbackMessage(`User account removed.`);
-    fetchUsers();
-    setActionLoadingId(null);
-    setTimeout(() => setFeedbackMessage(null), 4000);
+    });
   };
 
   // Save Website CMS Settings (Website Update)
@@ -410,6 +501,170 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setCmsSaving(false);
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
+
+  // ---------------- CERTIFICATES ACTION HANDLERS ---------------- //
+  const refreshCertificates = () => {
+    setCertificates(getStoredCertificates());
+  };
+
+  const handleOpenReview = (cert: CandidateCertificate) => {
+    const todayFormatted = new Date().toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+    setReviewingCert(cert);
+    setApprovalForm({
+      certificateNumber: cert.certificateNumber,
+      issueDate: cert.issueDate || todayFormatted,
+      grade: cert.grade || 'Grade A+ (Distinction)',
+      approvedBy: cert.approvedBy || 'Director, Shine Group Jobs Placement Desk',
+      signatoryTitle: cert.signatoryTitle || 'Authorized Signatory • Jabalpur Office',
+      adminRemarks: cert.adminRemarks || 'Verified and approved after candidate examination.'
+    });
+  };
+
+  const handleConfirmApproval = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reviewingCert) return;
+    try {
+      await fetch(`/api/certificates/${reviewingCert.id}/approve`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': 'admin',
+          'Authorization': 'Bearer admin-token'
+        },
+        body: JSON.stringify(approvalForm)
+      });
+    } catch (err) {
+      console.warn('Backend certificate approval sync failed, saving locally:', err);
+    }
+
+    const updated = approveCertificate(reviewingCert.id, approvalForm);
+    if (updated) {
+      setFeedbackMessage(`Certificate ${updated.certificateNumber} officially approved & issued for ${updated.candidateName}!`);
+      refreshCertificates();
+      setReviewingCert(null);
+      setTimeout(() => setFeedbackMessage(null), 4000);
+    }
+  };
+
+  const handleOpenReject = (cert: CandidateCertificate) => {
+    setRejectingCert(cert);
+    setRejectionReason('Candidate training attendance or documentation could not be verified by administration.');
+  };
+
+  const handleConfirmRejection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectingCert) return;
+    try {
+      await fetch(`/api/certificates/${rejectingCert.id}/reject`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': 'admin',
+          'Authorization': 'Bearer admin-token'
+        },
+        body: JSON.stringify({ reason: rejectionReason })
+      });
+    } catch (err) {
+      console.warn('Backend certificate rejection sync failed, saving locally:', err);
+    }
+
+    const updated = rejectCertificate(rejectingCert.id, rejectionReason);
+    if (updated) {
+      setFeedbackMessage(`Certificate request for ${updated.candidateName} marked as rejected.`);
+      refreshCertificates();
+      setRejectingCert(null);
+      setTimeout(() => setFeedbackMessage(null), 4000);
+    }
+  };
+
+  const handleDirectIssueSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!directIssueForm.candidateName.trim() || !directIssueForm.courseOrRole.trim()) {
+      alert('Please fill candidate name and course/role.');
+      return;
+    }
+
+    try {
+      await fetch('/api/certificates/direct-issue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': 'admin',
+          'Authorization': 'Bearer admin-token'
+        },
+        body: JSON.stringify(directIssueForm)
+      });
+    } catch (err) {
+      console.warn('Backend direct certificate issue sync failed, saving locally:', err);
+    }
+
+    const newCert = adminDirectIssueCertificate(directIssueForm);
+    setFeedbackMessage(`Official certificate ${newCert.certificateNumber} generated and issued for ${newCert.candidateName}!`);
+    refreshCertificates();
+    setIsDirectIssueOpen(false);
+    setDirectIssueForm({
+      candidateName: '',
+      fatherName: '',
+      candidateEmail: '',
+      candidatePhone: '',
+      certificateType: 'Training & Skill Completion',
+      courseOrRole: 'Advanced Office Operations & Data Management',
+      duration: '3 Months (June 2026 - August 2026)',
+      grade: 'Grade A+ (Distinction)',
+      certificateNumber: '',
+      adminRemarks: 'Directly verified and issued by Shine Group Administration.'
+    });
+    setTimeout(() => setFeedbackMessage(null), 4000);
+  };
+
+  const handleDeleteCert = (certId: string, certNumber: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Certificate Record',
+      message: 'Are you sure you want to permanently delete this candidate certificate record? It will be removed from system databases and will no longer verify online.',
+      itemName: certNumber,
+      confirmLabel: 'Delete Certificate',
+      onConfirm: async () => {
+        deleteLocalCertificate(certId);
+        setCertificates(prev => prev.filter(c => c.id !== certId && c.certificateNumber !== certNumber));
+        setFeedbackMessage(`Certificate '${certNumber}' removed from records.`);
+        try {
+          await fetch(`/api/certificates/${certId}`, {
+            method: 'DELETE',
+            headers: {
+              'x-user-role': 'admin',
+              'Authorization': 'Bearer admin-token'
+            }
+          });
+        } catch (err) {
+          console.warn('Backend certificate delete sync failed, removed locally:', err);
+        }
+        refreshCertificates();
+        setTimeout(() => setFeedbackMessage(null), 4000);
+      }
+    });
+  };
+
+  const filteredCertificates = certificates.filter(c => {
+    const q = certSearch.toLowerCase().trim();
+    const matchSearch = 
+      !q ||
+      c.certificateNumber.toLowerCase().includes(q) ||
+      c.candidateName.toLowerCase().includes(q) ||
+      c.candidateEmail.toLowerCase().includes(q) ||
+      (c.candidatePhone && c.candidatePhone.includes(q)) ||
+      c.courseOrRole.toLowerCase().includes(q);
+    
+    const matchStatus = certStatusFilter === 'all' || c.status === certStatusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const pendingCertsCount = certificates.filter(c => c.status === 'Pending Approval').length;
+
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -552,6 +807,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-extrabold">
                 {registeredUsers.length}
               </span>
+            </button>
+
+            {/* Certificates Management Tab with Pending Badge */}
+            <button
+              onClick={() => {
+                setActiveTab('certificates');
+                refreshCertificates();
+              }}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                activeTab === 'certificates'
+                  ? 'bg-slate-950 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Award className="w-4 h-4 text-amber-500" />
+                <span>Certificates Desk</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {pendingCertsCount > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 font-black animate-pulse">
+                    {pendingCertsCount} Pending
+                  </span>
+                )}
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 font-extrabold">
+                  {certificates.length}
+                </span>
+              </div>
             </button>
 
             <button
@@ -757,22 +1040,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         }`}>
                           {app.status}
                         </span>
-                        {app.resumeFile && (
-                          <button
-                            onClick={() => setSelectedResume({
-                              file: app.resumeFile!,
-                              candidateName: app.fullName,
-                              jobTitle: app.jobTitle,
-                              email: app.email,
-                              phone: app.phone
-                            })}
-                            className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors border border-blue-200"
-                            title={`View attached resume: ${app.resumeFile.name}`}
-                          >
-                            <FileText className="w-3 h-3 text-blue-600" />
-                            <span>Resume</span>
-                          </button>
-                        )}
+                        <button
+                          onClick={() => setSelectedResumeApp(app)}
+                          className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-[11px] flex items-center gap-1 cursor-pointer transition-colors border border-blue-200"
+                          title={`View candidate application & resume: ${app.fullName}`}
+                        >
+                          <FileText className="w-3 h-3 text-blue-600" />
+                          <span>{app.resumeFile ? 'View Resume' : 'View Profile'}</span>
+                        </button>
                         <button
                           onClick={() => {
                             setActiveTab('applications');
@@ -864,18 +1139,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <tr key={job.id} className="hover:bg-slate-50/70 transition-colors">
                           
                           <td className="py-3.5 px-4">
-                            <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                              <span>{job.title}</span>
-                              {job.isUrgent && (
-                                <span className="px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">
-                                  Urgent
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-slate-500 text-[11px] flex items-center gap-1 mt-0.5">
-                              <span>{job.company}</span>
-                              <span>•</span>
-                              <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3 text-slate-400" />{job.location}</span>
+                            <div className="flex items-center gap-2.5">
+                              {job.imageUrl ? (
+                                <div 
+                                  onClick={() => onSelectJob(job)}
+                                  className="w-10 h-10 rounded-lg overflow-hidden border border-slate-200 bg-slate-900 shrink-0 shadow-2xs cursor-pointer hover:opacity-80 transition-opacity"
+                                  title="Click to view poster"
+                                >
+                                  <img 
+                                    src={job.imageUrl} 
+                                    alt={job.title} 
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-full object-cover" 
+                                  />
+                                </div>
+                              ) : null}
+                              <div>
+                                <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                                  <span>{job.title}</span>
+                                  {job.imageUrl && (
+                                    <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center gap-0.5" title="Has attached poster photo">
+                                      <ImageIcon className="w-2.5 h-2.5" /> Photo
+                                    </span>
+                                  )}
+                                  {job.isUrgent && (
+                                    <span className="px-1.5 py-0.2 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">
+                                      Urgent
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-slate-500 text-[11px] flex items-center gap-1 mt-0.5">
+                                  <span>{job.company}</span>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-0.5"><MapPin className="w-3 h-3 text-slate-400" />{job.location}</span>
+                                </div>
+                              </div>
                             </div>
                           </td>
 
@@ -1123,13 +1421,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                             <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
                               <button
-                                onClick={() => setSelectedResume({
-                                  file: app.resumeFile!,
-                                  candidateName: app.fullName,
-                                  jobTitle: app.jobTitle,
-                                  email: app.email,
-                                  phone: app.phone
-                                })}
+                                onClick={() => setSelectedResumeApp(app)}
                                 className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" />
@@ -1147,8 +1439,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </div>
                         </div>
                       ) : (
-                        <div className="mt-2.5 p-2 rounded-lg bg-slate-50 border border-slate-200/70 text-[11px] text-slate-500 flex items-center justify-between">
-                          <span>No resume file uploaded (Text summary provided)</span>
+                        <div className="mt-2.5 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center justify-between">
+                          <span className="text-slate-500">Digital Qualifications & Bio Submitted</span>
+                          <button
+                            onClick={() => setSelectedResumeApp(app)}
+                            className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center gap-1 border border-blue-200 cursor-pointer transition-colors"
+                          >
+                            <FileText className="w-3 h-3 text-blue-600" />
+                            <span>View Full Profile & Bio</span>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1182,6 +1481,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 text-[11px] font-semibold transition-all cursor-pointer"
                         >
                           Reject
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteApplication(app.id, app.fullName)}
+                          disabled={actionLoadingId === app.id}
+                          className="p-1.5 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 hover:text-rose-700 transition-all cursor-pointer"
+                          title="Delete this candidate application"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -1439,6 +1747,305 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           )}
 
+          {/* ========================================================
+              TAB 5: CERTIFICATES MANAGEMENT & ADMIN APPROVAL
+             ======================================================== */}
+          {activeTab === 'certificates' && (
+            <div className="space-y-6">
+              
+              {/* Header card with Actions */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold mb-1">
+                    <Award className="w-3.5 h-3.5 text-amber-600" />
+                    <span>ISO 9001:2015 Certification Controller</span>
+                  </div>
+                  <h3 className="text-xl font-bold tracking-tight text-slate-900 font-display">
+                    Official Certificates & Admin Approval Desk
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Review and approve candidate certificate requests. Har certificate ka unique number hota hai jisse aap turant find aur verify kar sakte hain.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setIsDirectIssueOpen(true)}
+                    className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>+ Issue Direct Certificate</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Metrics Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div 
+                  onClick={() => setCertStatusFilter('all')}
+                  className={`bg-white rounded-xl p-4 border transition-all cursor-pointer ${
+                    certStatusFilter === 'all' ? 'border-blue-600 ring-2 ring-blue-500/20' : 'border-slate-200'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Certificates</span>
+                  <div className="text-2xl font-black text-slate-900 mt-1">{certificates.length}</div>
+                  <span className="text-[10px] text-slate-500">All registered records</span>
+                </div>
+
+                <div 
+                  onClick={() => setCertStatusFilter('Pending Approval')}
+                  className={`bg-white rounded-xl p-4 border transition-all cursor-pointer ${
+                    certStatusFilter === 'Pending Approval' ? 'border-amber-500 ring-2 ring-amber-500/20' : 'border-slate-200'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-amber-600" /> Pending Approval
+                  </span>
+                  <div className="text-2xl font-black text-amber-600 mt-1">{pendingCertsCount}</div>
+                  <span className="text-[10px] text-amber-700 font-semibold">Requires Admin review</span>
+                </div>
+
+                <div 
+                  onClick={() => setCertStatusFilter('Approved')}
+                  className={`bg-white rounded-xl p-4 border transition-all cursor-pointer ${
+                    certStatusFilter === 'Approved' ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-slate-200'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Approved & Issued
+                  </span>
+                  <div className="text-2xl font-black text-emerald-600 mt-1">
+                    {certificates.filter(c => c.status === 'Approved').length}
+                  </div>
+                  <span className="text-[10px] text-emerald-700">Official digital certificates</span>
+                </div>
+
+                <div 
+                  onClick={() => setCertStatusFilter('Rejected')}
+                  className={`bg-white rounded-xl p-4 border transition-all cursor-pointer ${
+                    certStatusFilter === 'Rejected' ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-slate-200'
+                  }`}
+                >
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-700 flex items-center gap-1">
+                    <XCircle className="w-3.5 h-3.5 text-rose-600" /> Rejected
+                  </span>
+                  <div className="text-2xl font-black text-rose-600 mt-1">
+                    {certificates.filter(c => c.status === 'Rejected').length}
+                  </div>
+                  <span className="text-[10px] text-slate-500">Unverified requests</span>
+                </div>
+              </div>
+
+              {/* Search Bar - Find Certificate by Unique Number */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative grow w-full">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <input
+                    type="text"
+                    value={certSearch}
+                    onChange={(e) => setCertSearch(e.target.value)}
+                    placeholder="Find certificate by Unique Number (e.g. SGJ-CERT-2026-10492), Candidate Name, Email, or Course..."
+                    className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
+                  {certSearch && (
+                    <button
+                      onClick={() => setCertSearch('')}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                  <select
+                    value={certStatusFilter}
+                    onChange={(e) => setCertStatusFilter(e.target.value)}
+                    className="w-full sm:w-auto px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="Pending Approval">Pending Approval Only</option>
+                    <option value="Approved">Approved Only</option>
+                    <option value="Rejected">Rejected Only</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Certificates Records Table */}
+              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+                      <tr>
+                        <th className="py-3 px-4">Unique Cert Number</th>
+                        <th className="py-3 px-4">Candidate Details</th>
+                        <th className="py-3 px-4">Certificate Type & Role</th>
+                        <th className="py-3 px-4">Duration & Dates</th>
+                        <th className="py-3 px-4">Status & Grade</th>
+                        <th className="py-3 px-4 text-right">Admin Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredCertificates.map((cert) => {
+                        const isApproved = cert.status === 'Approved';
+                        const isPending = cert.status === 'Pending Approval';
+                        const isRejected = cert.status === 'Rejected';
+
+                        return (
+                          <tr key={cert.id} className="hover:bg-slate-50/80 transition-colors">
+                            {/* Unique Certificate Number with Copy */}
+                            <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
+                              <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-50 text-amber-900 border border-amber-200">
+                                <span>{cert.certificateNumber}</span>
+                                <button
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(cert.certificateNumber);
+                                    setFeedbackMessage(`Copied ${cert.certificateNumber}`);
+                                    setTimeout(() => setFeedbackMessage(null), 2500);
+                                  }}
+                                  className="text-amber-700 hover:text-amber-950 p-0.5 cursor-pointer"
+                                  title="Copy unique number"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <span className="block text-[10px] text-slate-400 font-sans mt-0.5 font-normal">
+                                UID: {cert.id}
+                              </span>
+                            </td>
+
+                            {/* Candidate Details */}
+                            <td className="py-3.5 px-4">
+                              <div className="font-bold text-slate-900 text-sm">{cert.candidateName}</div>
+                              {cert.fatherName && (
+                                <div className="text-[11px] text-slate-500">S/D of {cert.fatherName}</div>
+                              )}
+                              <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                <Mail className="w-3 h-3 text-slate-400" />
+                                <span>{cert.candidateEmail}</span>
+                              </div>
+                              {cert.candidatePhone && (
+                                <div className="text-[11px] text-slate-500 flex items-center gap-1">
+                                  <Phone className="w-3 h-3 text-slate-400" />
+                                  <span>{cert.candidatePhone}</span>
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Certificate Type & Course/Role */}
+                            <td className="py-3.5 px-4">
+                              <span className="font-semibold text-slate-800 block text-xs">
+                                {cert.courseOrRole}
+                              </span>
+                              <span className="text-[11px] text-amber-800 bg-amber-50/80 px-1.5 py-0.2 rounded border border-amber-200/50 inline-block mt-0.5">
+                                {cert.certificateType}
+                              </span>
+                              {cert.adminRemarks && (
+                                <p className="text-[10px] text-slate-500 italic mt-1 line-clamp-2">
+                                  "{cert.adminRemarks}"
+                                </p>
+                              )}
+                            </td>
+
+                            {/* Duration & Dates */}
+                            <td className="py-3.5 px-4">
+                              <div className="font-medium text-slate-800">{cert.duration}</div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">
+                                Req: {cert.requestedDate}
+                              </div>
+                              {cert.issueDate && (
+                                <div className="text-[11px] text-emerald-700 font-semibold">
+                                  Issued: {cert.issueDate}
+                                </div>
+                              )}
+                            </td>
+
+                            {/* Status & Grade */}
+                            <td className="py-3.5 px-4">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold inline-flex items-center gap-1 ${
+                                isApproved
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : isPending
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
+                              }`}>
+                                {isApproved && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                                {isPending && <Clock className="w-3 h-3 text-amber-600" />}
+                                {isRejected && <XCircle className="w-3 h-3 text-rose-600" />}
+                                <span>{cert.status}</span>
+                              </span>
+                              {cert.grade && isApproved && (
+                                <span className="block text-[11px] font-semibold text-slate-700 mt-1">
+                                  {cert.grade}
+                                </span>
+                              )}
+                              {isRejected && cert.rejectionReason && (
+                                <span className="block text-[10px] text-rose-600 mt-1 line-clamp-1">
+                                  {cert.rejectionReason}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Admin Actions */}
+                            <td className="py-3.5 px-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {isPending ? (
+                                  <>
+                                    <button
+                                      onClick={() => handleOpenReview(cert)}
+                                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer"
+                                      title="Review details and approve certificate"
+                                    >
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>Approve</span>
+                                    </button>
+                                    <button
+                                      onClick={() => handleOpenReject(cert)}
+                                      className="px-2 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold text-xs border border-rose-200 cursor-pointer"
+                                      title="Reject certificate request"
+                                    >
+                                      Reject
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    onClick={() => setSelectedCertForPrint(cert)}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 font-semibold text-xs flex items-center gap-1 shadow-xs cursor-pointer"
+                                    title="View & Print Official Certificate"
+                                  >
+                                    <Printer className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>View / Print</span>
+                                  </button>
+                                )}
+
+                                <button
+                                  onClick={() => handleDeleteCert(cert.id, cert.certificateNumber)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer ml-1"
+                                  title="Delete certificate"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {filteredCertificates.length === 0 && (
+                  <div className="p-12 text-center text-slate-500 text-xs space-y-2">
+                    <Award className="w-8 h-8 text-slate-300 mx-auto" />
+                    <p className="font-semibold text-slate-700">No certificates match your search query.</p>
+                    <p className="text-[11px] text-slate-400">Try searching with candidate name or another unique certificate number.</p>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+
         </main>
 
       </div>
@@ -1457,61 +2064,58 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         }}
       />
 
-      {/* Admin Resume Document Viewer Modal */}
-      {selectedResume && (
+      {/* Admin Candidate Resume & Dossier Modal */}
+      {selectedResumeApp && (
         <div 
-          className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6"
-          onClick={() => setSelectedResume(null)}
+          className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+          onClick={() => setSelectedResumeApp(null)}
         >
           <div 
             className="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-4 shrink-0">
+            <div className="p-4 sm:p-5 border-b border-slate-200 bg-slate-900 text-white flex items-center justify-between gap-4 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                  {selectedResume.file.name.toLowerCase().endsWith('.pdf') ? (
-                    <FileText className="w-5 h-5" />
-                  ) : selectedResume.file.name.toLowerCase().endsWith('.zip') ? (
-                    <FileArchive className="w-5 h-5" />
-                  ) : (
-                    <ImageIcon className="w-5 h-5" />
-                  )}
+                <div className="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-400/40 text-blue-300 flex items-center justify-center shrink-0 shadow-sm">
+                  <FileText className="w-5 h-5 text-blue-400" />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-bold text-slate-900 truncate">
-                      {selectedResume.candidateName} — Resume
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-bold text-white truncate">
+                      {selectedResumeApp.fullName}
                     </h3>
-                    <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-extrabold text-[10px] uppercase shrink-0">
-                      {selectedResume.file.name.split('.').pop() || 'DOCUMENT'}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                      selectedResumeApp.status === 'Shortlisted' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' :
+                      selectedResumeApp.status === 'Interview Scheduled' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
+                      selectedResumeApp.status === 'Rejected' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' :
+                      'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                    }`}>
+                      {selectedResumeApp.status}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 truncate mt-0.5">
-                    Applied for: <span className="font-semibold text-slate-700">{selectedResume.jobTitle}</span>
-                    {selectedResume.phone && <span> • {selectedResume.phone}</span>}
-                    {selectedResume.email && <span> • {selectedResume.email}</span>}
+                  <p className="text-xs text-slate-300 truncate mt-0.5">
+                    Role: <span className="text-amber-400 font-semibold">{selectedResumeApp.jobTitle}</span> • {selectedResumeApp.company}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                {/* Direct Download Button */}
-                <a
-                  href={selectedResume.file.dataUrl}
-                  download={selectedResume.file.name}
-                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
-                  title="Download file to computer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Download</span>
-                </a>
+                {selectedResumeApp.resumeFile && (
+                  <a
+                    href={selectedResumeApp.resumeFile.dataUrl}
+                    download={selectedResumeApp.resumeFile.name}
+                    className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                    title="Download resume file"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Download File</span>
+                  </a>
+                )}
 
-                {/* Close button */}
                 <button
-                  onClick={() => setSelectedResume(null)}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 cursor-pointer transition-colors"
+                  onClick={() => setSelectedResumeApp(null)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer transition-colors"
                   title="Close viewer"
                 >
                   <X className="w-5 h-5" />
@@ -1519,73 +2123,629 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
             </div>
 
-            {/* File Meta Sub-bar */}
-            <div className="px-5 py-2.5 bg-slate-100/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-slate-700">File:</span>
-                <span className="font-mono text-slate-800 truncate max-w-[280px]">{selectedResume.file.name}</span>
-                <span className="text-slate-400">•</span>
-                <span>Size: {formatFileSize(selectedResume.file.size)}</span>
+            {/* Quick Candidate Action Sub-bar */}
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={`tel:${selectedResumeApp.phone}`}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-colors shadow-2xs"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  <span>Call: {selectedResumeApp.phone}</span>
+                </a>
+
+                <a
+                  href={`https://wa.me/${selectedResumeApp.phone.replace(/[^0-9]/g, '')}?text=Hello%20${encodeURIComponent(selectedResumeApp.fullName)},%20this%20is%20Shine%20Group%20Jobs%20regarding%20your%20application%20for%20${encodeURIComponent(selectedResumeApp.jobTitle)}.`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white font-bold transition-colors shadow-2xs"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>WhatsApp</span>
+                </a>
+
+                {selectedResumeApp.email && (
+                  <a
+                    href={`mailto:${selectedResumeApp.email}?subject=Regarding your application for ${encodeURIComponent(selectedResumeApp.jobTitle)} - Shine Group Jobs`}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold border border-blue-200 transition-colors"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>{selectedResumeApp.email}</span>
+                  </a>
+                )}
               </div>
-              <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
-                <ShieldCheck className="w-3.5 h-3.5" /> Shine Verified Candidate Document
-              </span>
+
+              {/* Status Pipeline Direct Changer */}
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-700">Application Stage:</span>
+                <select
+                  value={selectedResumeApp.status}
+                  onChange={(e) => {
+                    const newStatus = e.target.value as JobApplication['status'];
+                    handleUpdateAppStatus(selectedResumeApp.id, newStatus);
+                    setSelectedResumeApp({ ...selectedResumeApp, status: newStatus });
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white font-bold text-slate-800 text-xs focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Submitted">Submitted (New)</option>
+                  <option value="Under Review">Under Review</option>
+                  <option value="Shortlisted">Shortlisted</option>
+                  <option value="Interview Scheduled">Interview Scheduled</option>
+                  <option value="Rejected">Rejected</option>
+                </select>
+              </div>
             </div>
 
-            {/* Document Body View */}
-            <div className="p-4 sm:p-6 overflow-y-auto grow bg-slate-100 flex items-center justify-center">
-              {selectedResume.file.name.toLowerCase().endsWith('.pdf') || selectedResume.file.type.includes('pdf') ? (
-                <div className="w-full h-[65vh] flex flex-col bg-white rounded-xl shadow-xs overflow-hidden border border-slate-200">
-                  <iframe
-                    src={selectedResume.file.dataUrl}
-                    title="Candidate Resume PDF"
-                    className="w-full h-full border-none"
-                  />
+            {/* Modal Body (Scrollable Dossier + Document) */}
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-4 grow bg-slate-100/60 text-xs">
+              
+              {/* Profile Details Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] text-slate-400 block font-medium">Current City</span>
+                  <span className="font-bold text-slate-900 text-xs sm:text-sm mt-0.5 block">{selectedResumeApp.currentCity}</span>
                 </div>
-              ) : selectedResume.file.name.toLowerCase().endsWith('.zip') || selectedResume.file.type.includes('zip') ? (
-                <div className="max-w-md w-full p-8 bg-white rounded-2xl border border-slate-200 shadow-sm text-center space-y-4 my-auto">
-                  <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto shadow-xs">
-                    <FileArchive className="w-8 h-8" />
+
+                <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] text-slate-400 block font-medium">Total Experience</span>
+                  <span className="font-bold text-slate-900 text-xs sm:text-sm mt-0.5 block">{selectedResumeApp.totalExperience}</span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] text-slate-400 block font-medium">Notice Period</span>
+                  <span className="font-bold text-slate-900 text-xs sm:text-sm mt-0.5 block">{selectedResumeApp.noticePeriod || 'Immediate'}</span>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs">
+                  <span className="text-[11px] text-slate-400 block font-medium">Expected / Current CTC</span>
+                  <span className="font-bold text-slate-900 text-xs sm:text-sm mt-0.5 block">
+                    {selectedResumeApp.expectedSalary || (selectedResumeApp as any).expectedCTC || 'As per norms'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Candidate Qualifications & Career Summary */}
+              <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-2">
+                <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5 text-blue-700">
+                  <Award className="w-3.5 h-3.5" />
+                  <span>Candidate Qualifications & Experience Summary</span>
+                </h4>
+                <p className="text-slate-700 leading-relaxed whitespace-pre-line text-xs sm:text-[13px] bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  {selectedResumeApp.resumeUrlOrSummary}
+                </p>
+                {selectedResumeApp.coverNote && (
+                  <div className="pt-2 border-t border-slate-100">
+                    <span className="font-bold text-slate-700 block text-[11px]">Cover Note / Message from Candidate:</span>
+                    <p className="italic text-slate-600 mt-1">"{selectedResumeApp.coverNote}"</p>
                   </div>
-                  <div>
-                    <h4 className="text-base font-bold text-slate-900">
-                      Compressed Archive Resume Package
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Candidate uploaded a ZIP archive containing their portfolio, certificates, and resume documents.
-                    </p>
+                )}
+              </div>
+
+              {/* Attached Resume Document (PDF / Image / Archive) */}
+              {selectedResumeApp.resumeFile ? (
+                <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="font-bold text-slate-900 text-xs sm:text-sm truncate max-w-[280px]">
+                        {selectedResumeApp.resumeFile.name}
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 text-[10px] font-mono font-bold uppercase">
+                        {selectedResumeApp.resumeFile.name.split('.').pop() || 'FILE'}
+                      </span>
+                      <span className="text-slate-400 text-xs">
+                        ({formatFileSize(selectedResumeApp.resumeFile.size)})
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={selectedResumeApp.resumeFile.dataUrl}
+                        download={selectedResumeApp.resumeFile.name}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Resume Document</span>
+                      </a>
+                    </div>
                   </div>
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-left space-y-1">
-                    <div><span className="text-slate-500">Archive Name:</span> <span className="font-mono font-bold text-slate-800">{selectedResume.file.name}</span></div>
-                    <div><span className="text-slate-500">Archive Size:</span> <span className="font-semibold text-slate-800">{formatFileSize(selectedResume.file.size)}</span></div>
+
+                  {/* Document Preview Renderer */}
+                  <div className="rounded-xl border border-slate-200 overflow-hidden bg-slate-100">
+                    {selectedResumeApp.resumeFile.name.toLowerCase().endsWith('.pdf') || selectedResumeApp.resumeFile.type.includes('pdf') || selectedResumeApp.resumeFile.dataUrl.startsWith('data:application/pdf') ? (
+                      <div className="flex flex-col">
+                        <object
+                          data={selectedResumeApp.resumeFile.dataUrl}
+                          type="application/pdf"
+                          className="w-full h-[520px] bg-white border-none"
+                        >
+                          <iframe
+                            src={selectedResumeApp.resumeFile.dataUrl}
+                            title="Candidate Resume PDF"
+                            className="w-full h-[520px] border-none"
+                          />
+                        </object>
+                        <div className="p-2.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600">
+                          <span>PDF Document Preview</span>
+                          <a
+                            href={selectedResumeApp.resumeFile.dataUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 font-semibold hover:underline flex items-center gap-1"
+                          >
+                            <span>Open PDF in New Window</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                      </div>
+                    ) : selectedResumeApp.resumeFile.name.toLowerCase().endsWith('.zip') || selectedResumeApp.resumeFile.type.includes('zip') ? (
+                      <div className="p-8 text-center space-y-3">
+                        <FileArchive className="w-12 h-12 text-amber-500 mx-auto" />
+                        <h4 className="font-bold text-slate-900 text-sm">Candidate Portfolio Archive ({selectedResumeApp.resumeFile.name})</h4>
+                        <p className="text-slate-500 text-xs">This compressed file package contains candidate certificates and work samples.</p>
+                        <a
+                          href={selectedResumeApp.resumeFile.dataUrl}
+                          download={selectedResumeApp.resumeFile.name}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Download Archive File</span>
+                        </a>
+                      </div>
+                    ) : (
+                      /* Image preview */
+                      <div className="p-4 flex flex-col items-center justify-center max-h-[520px] overflow-auto bg-slate-900/5">
+                        <img
+                          src={selectedResumeApp.resumeFile.dataUrl}
+                          alt="Resume Preview"
+                          className="max-w-full max-h-[480px] h-auto object-contain rounded-lg shadow-sm border border-slate-300"
+                        />
+                      </div>
+                    )}
                   </div>
-                  <a
-                    href={selectedResume.file.dataUrl}
-                    download={selectedResume.file.name}
-                    className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Download & Extract ZIP Archive</span>
-                  </a>
                 </div>
               ) : (
-                /* Image (JPEG / PNG) */
-                <div className="w-full flex flex-col items-center justify-center">
-                  <div className="bg-white p-2 rounded-2xl shadow-md border border-slate-200 max-w-full">
-                    <img
-                      src={selectedResume.file.dataUrl}
-                      alt="Candidate Resume Preview"
-                      referrerPolicy="no-referrer"
-                      className="max-h-[65vh] w-auto max-w-full rounded-xl object-contain mx-auto"
-                    />
+                <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 text-blue-900 text-xs flex items-start gap-3">
+                  <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block text-sm">Verified Digital Career Profile Submitted</span>
+                    <p className="mt-0.5 text-blue-800 leading-relaxed">
+                      Candidate ne online portal form ke madhyam se apna complete experience aur qualification details darj kiya hai (details above). Is application ke sath alag se koi PDF file attach nahi ki gayi thi.
+                    </p>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-2">
-                    Full resolution image preview • Click Download button to save original document
-                  </p>
                 </div>
               )}
+
             </div>
 
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs shrink-0">
+              <span className="text-slate-500">
+                Application UID: <span className="font-mono text-slate-700 font-semibold">{selectedResumeApp.id}</span> • Applied: {selectedResumeApp.appliedDate}
+              </span>
+              <button
+                onClick={() => setSelectedResumeApp(null)}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer"
+              >
+                Close Viewer
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Review & Approve Certificate Modal */}
+      {reviewingCert && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Review & Approve Certificate</h3>
+                  <p className="text-xs text-slate-300">Issue official verified certificate with unique number</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setReviewingCert(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmApproval} className="p-6 space-y-4 text-xs">
+              
+              {/* Candidate Info Summary */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Candidate:</span>
+                  <span className="font-bold text-slate-900 text-sm">{reviewingCert.candidateName}</span>
+                </div>
+                {reviewingCert.fatherName && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500">Father's Name:</span>
+                    <span className="font-semibold text-slate-800">{reviewingCert.fatherName}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Type & Role:</span>
+                  <span className="font-semibold text-amber-900">{reviewingCert.certificateType} • {reviewingCert.courseOrRole}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Duration:</span>
+                  <span className="font-medium text-slate-700">{reviewingCert.duration}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Email / Phone:</span>
+                  <span className="font-medium text-slate-700">{reviewingCert.candidateEmail} {reviewingCert.candidatePhone ? `• ${reviewingCert.candidatePhone}` : ''}</span>
+                </div>
+              </div>
+
+              {/* Unique Certificate Number (Editable/Confirm) */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Unique Certificate Number * (Official Serial ID)
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={approvalForm.certificateNumber}
+                  onChange={(e) => setApprovalForm({ ...approvalForm, certificateNumber: e.target.value.toUpperCase() })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono text-xs font-bold text-slate-900 uppercase focus:ring-2 focus:ring-emerald-500"
+                />
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  Ye unique number certificate verify karne ke liye use hoga.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Issue Date */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Official Issue Date *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={approvalForm.issueDate}
+                    onChange={(e) => setApprovalForm({ ...approvalForm, issueDate: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                {/* Grade */}
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Performance Evaluation Grade *
+                  </label>
+                  <select
+                    value={approvalForm.grade}
+                    onChange={(e) => setApprovalForm({ ...approvalForm, grade: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="Grade A+ (Distinction)">Grade A+ (Distinction)</option>
+                    <option value="Grade A (Excellent)">Grade A (Excellent)</option>
+                    <option value="Grade B+ (Good)">Grade B+ (Good)</option>
+                    <option value="First Division with Honors">First Division with Honors</option>
+                    <option value="Successful Completion">Successful Completion</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Authorized Signatory Title */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Authorized Signatory Designation
+                </label>
+                <input
+                  type="text"
+                  value={approvalForm.approvedBy}
+                  onChange={(e) => setApprovalForm({ ...approvalForm, approvedBy: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              {/* Admin Remarks */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Admin Internal Approval Note
+                </label>
+                <textarea
+                  rows={2}
+                  value={approvalForm.adminRemarks}
+                  onChange={(e) => setApprovalForm({ ...approvalForm, adminRemarks: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReviewingCert(null)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Approve & Issue Certificate</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Modal */}
+      {rejectingCert && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-rose-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <XCircle className="w-5 h-5 text-rose-300" />
+                <h3 className="font-bold text-base">Reject Certificate Request</h3>
+              </div>
+              <button
+                onClick={() => setRejectingCert(null)}
+                className="text-rose-200 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmRejection} className="p-6 space-y-4 text-xs">
+              <p className="text-slate-600">
+                Are you sure you want to reject the certificate request for <strong className="text-slate-900">{rejectingCert.candidateName}</strong> ({rejectingCert.certificateNumber})?
+              </p>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Reason for Rejection *
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRejectingCert(null)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <span>Confirm Rejection</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Direct Issue Certificate Modal */}
+      {isDirectIssueOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
+          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Direct Issue Official Certificate</h3>
+                  <p className="text-xs text-slate-300">Generate and issue directly with status Approved</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDirectIssueOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDirectIssueSubmit} className="p-6 space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Candidate Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={directIssueForm.candidateName}
+                    onChange={(e) => setDirectIssueForm({ ...directIssueForm, candidateName: e.target.value })}
+                    placeholder="e.g. Rahul Shrivastava"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Father's / Guardian Name</label>
+                  <input
+                    type="text"
+                    value={directIssueForm.fatherName}
+                    onChange={(e) => setDirectIssueForm({ ...directIssueForm, fatherName: e.target.value })}
+                    placeholder="e.g. Shri Ramesh Shrivastava"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Candidate Email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={directIssueForm.candidateEmail}
+                    onChange={(e) => setDirectIssueForm({ ...directIssueForm, candidateEmail: e.target.value })}
+                    placeholder="candidate@example.com"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    value={directIssueForm.candidatePhone}
+                    onChange={(e) => setDirectIssueForm({ ...directIssueForm, candidatePhone: e.target.value })}
+                    placeholder="+91 9752661102"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Certificate Type *</label>
+                  <select
+                    value={directIssueForm.certificateType}
+                    onChange={(e) => setDirectIssueForm({ ...directIssueForm, certificateType: e.target.value as CertificateType })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="Training & Skill Completion">Training & Skill Completion</option>
+                    <option value="Internship Completion">Internship Completion</option>
+                    <option value="Job Placement & Experience Verification">Job Placement & Experience Verification</option>
+                    <option value="Job Offer & Appointment Verification">Job Offer & Appointment Verification</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Performance Grade *</label>
+                  <select
+                    value={directIssueForm.grade}
+                    onChange={(e) => setDirectIssueForm({ ...directIssueForm, grade: e.target.value })}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-white focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="Grade A+ (Distinction)">Grade A+ (Distinction)</option>
+                    <option value="Grade A (Excellent)">Grade A (Excellent)</option>
+                    <option value="Grade B+ (Good)">Grade B+ (Good)</option>
+                    <option value="First Division with Honors">First Division with Honors</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Course / Training / Role Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={directIssueForm.courseOrRole}
+                  onChange={(e) => setDirectIssueForm({ ...directIssueForm, courseOrRole: e.target.value })}
+                  placeholder="e.g. Advanced Office Operations & Data Management"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Duration / Period *</label>
+                  <input
+                    type="text"
+                    required
+                    value={directIssueForm.duration}
+                    onChange={(e) => setDirectIssueForm({ ...directIssueForm, duration: e.target.value })}
+                    placeholder="e.g. 3 Months (June 2026 - August 2026)"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Custom Unique Cert No (Optional - leave blank for auto)
+                  </label>
+                  <input
+                    type="text"
+                    value={directIssueForm.certificateNumber}
+                    onChange={(e) => setDirectIssueForm({ ...directIssueForm, certificateNumber: e.target.value.toUpperCase() })}
+                    placeholder="Auto-generated e.g. SGJ-CERT-2026-XXXXX"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono uppercase focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDirectIssueOpen(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 font-bold flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                >
+                  <Award className="w-4 h-4 text-slate-950" />
+                  <span>Generate & Issue Certificate</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Official Certificate Modal for High-Resolution View & Print */}
+      <CertificateModal
+        certificate={selectedCertForPrint}
+        isOpen={!!selectedCertForPrint}
+        onClose={() => setSelectedCertForPrint(null)}
+      />
+
+      {/* Safe In-App Confirmation Modal (Replaces blocked window.confirm) */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">
+              {confirmModal.title || 'Confirm Deletion'}
+            </h3>
+            <p className="text-sm text-slate-600 mb-3 leading-relaxed">
+              {confirmModal.message}
+            </p>
+            {confirmModal.itemName && (
+              <div className="p-3 mb-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 break-words flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+                <span className="truncate">{confirmModal.itemName}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold text-xs cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const onConfirmAction = confirmModal.onConfirm;
+                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                  if (onConfirmAction) {
+                    await onConfirmAction();
+                  }
+                }}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-xs shadow-md shadow-rose-600/20 cursor-pointer transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>{confirmModal.confirmLabel || 'Yes, Delete'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1593,3 +2753,4 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     </div>
   );
 };
+

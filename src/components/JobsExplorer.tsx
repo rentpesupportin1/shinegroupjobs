@@ -21,7 +21,8 @@ import {
   Search,
   RotateCcw,
   Building2,
-  Phone
+  Phone,
+  Eye
 } from 'lucide-react';
 import { Job } from '../types.js';
 
@@ -459,6 +460,26 @@ export const JobsExplorer: React.FC<JobsExplorerProps> = ({
               >
                 <div>
                   
+                  {/* Upper Photo / Hiring Poster (If uploaded, shown prominently above; if not, only details shown) */}
+                  {job.imageUrl && (
+                    <div 
+                      onClick={() => onJobSelect(job)}
+                      className="w-full h-48 sm:h-56 -mt-1 mb-4 rounded-xl overflow-hidden bg-slate-950 border border-slate-200 cursor-pointer shadow-xs relative group/img"
+                    >
+                      <img 
+                        src={job.imageUrl} 
+                        alt={job.title} 
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-transparent to-transparent flex items-end p-3.5 opacity-90 group-hover/img:opacity-100 transition-opacity">
+                        <span className="text-white text-xs font-semibold flex items-center gap-1.5 drop-shadow-md">
+                          <Eye className="w-3.5 h-3.5 text-blue-400" /> Click to view full vacancy details
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Top Badges & Company Row */}
                   <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                     <div className="flex items-center gap-3">

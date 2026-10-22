@@ -13,21 +13,26 @@ import {
   Trash2,
   Send,
   ShieldCheck,
-  Laptop
+  Laptop,
+  Image as ImageIcon,
+  UploadCloud,
+  FileImage
 } from 'lucide-react';
-import { Job } from '../types.js';
+import { Job, User } from '../types.js';
 import { saveLocalCustomJob } from '../utils/localPersistence.js';
 
 interface PostJobModalProps {
   isOpen: boolean;
   onClose: () => void;
   onJobPosted: (newJob: Job) => void;
+  currentUser?: User | null;
 }
 
 export const PostJobModal: React.FC<PostJobModalProps> = ({
   isOpen,
   onClose,
-  onJobPosted
+  onJobPosted,
+  currentUser
 }) => {
   const [formData, setFormData] = useState({
     title: '',
@@ -50,15 +55,58 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
     contactPhone: '+91 9752661102',
     postedBy: 'Direct Employer',
     deadline: '',
+    imageUrl: '',
     isUrgent: false,
     isGovtOutsourced: false,
     isVerifiedWFH: false
   });
 
+  const [imageMeta, setImageMeta] = useState<{ name: string; size: number } | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+
   const [aiLoading, setAiLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Handle Image File Upload (Max 50MB)
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImageError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const maxSizeBytes = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSizeBytes) {
+      setImageError(`Selected image is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is 50 MB.`);
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setImageError('Please select a valid image file (PNG, JPG, JPEG, WEBP, GIF, SVG).');
+      return;
+    }
+
+    setImageLoading(true);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setFormData(prev => ({ ...prev, imageUrl: result }));
+      setImageMeta({ name: file.name, size: file.size });
+      setImageLoading(false);
+    };
+    reader.onerror = () => {
+      setImageError('Failed to read image file. Please try again.');
+      setImageLoading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setFormData(prev => ({ ...prev, imageUrl: '' }));
+    setImageMeta(null);
+    setImageError(null);
+  };
 
   if (!isOpen) return null;
 
@@ -137,6 +185,11 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+
+    if (currentUser?.role !== 'admin') {
+      setErrorMsg('Access Restricted: Only verified Shine Group Administrators are authorized to post job vacancies.');
+      return;
+    }
 
     if (!formData.title.trim() || !formData.company.trim() || !formData.description.trim()) {
       setErrorMsg('Please provide the Job Title, Company Name, and Job Description.');
@@ -280,6 +333,102 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
               <span>{successMsg}</span>
             </div>
           )}
+
+          {/* Photo / Poster Upload Section (Upper image upload - Max 50MB) */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 border-2 border-dashed border-blue-300 hover:border-blue-500 transition-colors">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
+                  <ImageIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                    <span>Job / Hiring Poster Image</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-100 text-blue-800 border border-blue-200">
+                      Supports up to 50 MB
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-normal">
+                      (Optional)
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Upload official recruitment flyer, company banner, or walk-in notice. Image will appear at the top of the job post.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {imageError && (
+              <div className="mt-2.5 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{imageError}</span>
+              </div>
+            )}
+
+            {formData.imageUrl ? (
+              <div className="mt-3 relative rounded-xl overflow-hidden border border-slate-200 bg-slate-950 shadow-md">
+                <img
+                  src={formData.imageUrl}
+                  alt="Job post poster preview"
+                  referrerPolicy="no-referrer"
+                  className="w-full max-h-64 object-contain mx-auto"
+                />
+                <div className="p-3 bg-slate-900 text-white flex items-center justify-between flex-wrap gap-2 text-xs border-t border-slate-800">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileImage className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="font-semibold truncate max-w-[220px]">
+                      {imageMeta?.name || 'Uploaded_Job_Poster.jpg'}
+                    </span>
+                    {imageMeta && (
+                      <span className="text-[11px] text-slate-400">
+                        ({(imageMeta.size / (1024 * 1024)).toFixed(2)} MB / 50 MB)
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition-colors">
+                      <span>Change Image</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageChange}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2">
+                <label className="flex flex-col items-center justify-center p-5 rounded-xl border border-slate-300/80 bg-white hover:bg-blue-50/40 cursor-pointer transition-all group">
+                  <UploadCloud className="w-8 h-8 text-blue-500 group-hover:scale-110 transition-transform mb-1.5" />
+                  <span className="text-xs font-bold text-slate-800 group-hover:text-blue-600">
+                    Click to browse or drop hiring poster image
+                  </span>
+                  <span className="text-[11px] text-slate-400 mt-0.5">
+                    PNG, JPG, JPEG, WEBP, SVG • Maximum file size: 50 Megabytes (50 MB)
+                  </span>
+                  <span className="mt-2 text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                    Leave blank to show job details only without any photo
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageChange}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
 
           {/* Section 1: Basic Information */}
           <div className="space-y-4">

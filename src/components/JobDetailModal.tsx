@@ -18,7 +18,8 @@ import {
   ChevronRight,
   Flame,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 import { Job } from '../types.js';
 
@@ -28,6 +29,8 @@ interface JobDetailModalProps {
   onApply: (job: Job) => void;
   isSaved: boolean;
   onToggleSave: (jobId: string) => void;
+  isAdmin?: boolean;
+  onDeleteJob?: (jobId: string) => void;
 }
 
 export const JobDetailModal: React.FC<JobDetailModalProps> = ({
@@ -35,9 +38,12 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
   onClose,
   onApply,
   isSaved,
-  onToggleSave
+  onToggleSave,
+  isAdmin = false,
+  onDeleteJob
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
   if (!job) return null;
 
@@ -125,6 +131,18 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
         {/* Modal Scrollable Body */}
         <div className="p-6 overflow-y-auto space-y-6 text-sm text-slate-700">
           
+          {/* Upper Photo / Hiring Poster Banner (Displayed only when image is provided) */}
+          {job.imageUrl && (
+            <div className="relative rounded-2xl overflow-hidden border border-slate-200/90 shadow-md bg-slate-950 flex items-center justify-center">
+              <img
+                src={job.imageUrl}
+                alt={`${job.title} - ${job.company}`}
+                referrerPolicy="no-referrer"
+                className="w-full max-h-[440px] object-contain mx-auto"
+              />
+            </div>
+          )}
+
           {/* Key Facts Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
             <div>
@@ -300,6 +318,41 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({
               <Share2 className="w-4 h-4" />
               <span>{copied ? "Link Copied!" : "Share"}</span>
             </button>
+
+            {/* Admin Delete Action */}
+            {isAdmin && onDeleteJob && (
+              <>
+                {!isConfirmingDelete ? (
+                  <button
+                    onClick={() => setIsConfirmingDelete(true)}
+                    className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Admin: Delete this vacancy"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Vacancy</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-300 px-2.5 py-1 rounded-xl animate-in fade-in duration-100">
+                    <span className="text-[11px] font-bold text-rose-800">Confirm delete?</span>
+                    <button
+                      onClick={() => {
+                        onDeleteJob(job.id);
+                        onClose();
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold cursor-pointer transition-colors"
+                    >
+                      Yes, Delete
+                    </button>
+                    <button
+                      onClick={() => setIsConfirmingDelete(false)}
+                      className="px-2 py-0.5 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-semibold cursor-pointer transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-2">

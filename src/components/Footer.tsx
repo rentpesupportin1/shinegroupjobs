@@ -5,7 +5,8 @@ import {
   Phone, 
   Mail, 
   ShieldCheck, 
-  Heart
+  Heart,
+  Award
 } from 'lucide-react';
 
 interface FooterProps {
@@ -141,6 +142,15 @@ export const Footer: React.FC<FooterProps> = ({
                   className="hover:text-blue-400 transition-colors text-left cursor-pointer"
                 >
                   Track Submitted Applications
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => onNavigateTab('applications')}
+                  className="hover:text-amber-400 text-amber-300 font-semibold transition-colors text-left cursor-pointer flex items-center gap-1"
+                >
+                  <Award className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Certificate Generator & Verification</span>
                 </button>
               </li>
               <li>

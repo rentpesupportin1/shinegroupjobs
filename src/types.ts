@@ -24,6 +24,7 @@ export interface Job {
   deadline?: string;
   views: number;
   applicantsCount: number;
+  imageUrl?: string; // Optional job / hiring poster image up to 50MB
   isUrgent?: boolean;
   isFeatured?: boolean;
   isGovtOutsourced?: boolean;
@@ -124,3 +125,34 @@ export interface WebsiteSettings {
   whatsappMessage: string;
   aboutUsText?: string;
 }
+
+export type CertificateStatus = "Pending Approval" | "Approved" | "Rejected";
+
+export type CertificateType = 
+  | "Training & Skill Completion" 
+  | "Internship Completion" 
+  | "Job Placement & Experience Verification" 
+  | "Job Offer & Appointment Verification";
+
+export interface CandidateCertificate {
+  id: string; // Internal ID
+  certificateNumber: string; // Unique Certificate Serial Number e.g. "SGJ-CERT-2026-10492"
+  candidateName: string;
+  fatherName?: string;
+  candidateEmail: string;
+  candidatePhone?: string;
+  certificateType: CertificateType;
+  courseOrRole: string; // e.g. "Office Operations & Data Management"
+  duration: string; // e.g. "3 Months (June 2026 - August 2026)"
+  issueDate?: string; // e.g. "14 October 2026"
+  grade?: string; // e.g. "Grade A+ (Distinction)"
+  organization?: string; // e.g. "Shine Group Jobs & Placement Consultancy, Jabalpur"
+  requestedDate: string;
+  status: CertificateStatus;
+  rejectionReason?: string;
+  adminRemarks?: string;
+  approvedBy?: string; // Name of approving admin e.g. "Placement Director, Shine Group Jobs"
+  approvedDate?: string;
+  signatoryTitle?: string;
+}
+

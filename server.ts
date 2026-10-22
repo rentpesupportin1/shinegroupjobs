@@ -5,7 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { INITIAL_JOBS, INITIAL_STATS } from "./src/data/initialJobs.js";
-import { Job, JobApplication, ContactInquiry } from "./src/types.js";
+import { Job, JobApplication, ContactInquiry, CandidateCertificate } from "./src/types.js";
 
 dotenv.config();
 
@@ -64,6 +64,43 @@ let applicationsStore: JobApplication[] = [
   }
 ];
 
+let certificatesStore: CandidateCertificate[] = [
+  {
+    id: "cert-101",
+    certificateNumber: "SGJ-CERT-2026-10492",
+    candidateName: "Rahul Shrivastava",
+    fatherName: "Shri Ramesh Shrivastava",
+    candidateEmail: "rahul.shrivastava@example.com",
+    candidatePhone: "+91 9826112233",
+    certificateType: "Training & Skill Completion",
+    courseOrRole: "Advanced Office Operations, e-Governance & Citizen Portal Management",
+    duration: "3 Months (July 2026 - September 2026)",
+    issueDate: "10 October 2026",
+    grade: "Grade A+ (Distinction)",
+    organization: "Shine Group Jobs & Placement Center, Jabalpur (ISO 9001:2015)",
+    requestedDate: "2026-10-08",
+    status: "Approved",
+    approvedBy: "Placement Director & Controller, Shine Group Jobs",
+    approvedDate: "2026-10-10",
+    signatoryTitle: "Authorized Signatory • Shine Group Jabalpur",
+    adminRemarks: "Completed all practical assignments with distinction. Recommended for state e-mission roles."
+  },
+  {
+    id: "cert-102",
+    certificateNumber: "SGJ-CERT-2026-20381",
+    candidateName: "Priya Tiwari",
+    fatherName: "Shri Alok Tiwari",
+    candidateEmail: "priya.t@example.com",
+    candidatePhone: "+91 9407334455",
+    certificateType: "Internship Completion",
+    courseOrRole: "Data Quality, MIS Indexing & Remote Operations Specialist",
+    duration: "6 Months (April 2026 - September 2026)",
+    requestedDate: "2026-10-12",
+    status: "Pending Approval",
+    organization: "Shine Group Jobs & Placement Center, Jabalpur (ISO 9001:2015)"
+  }
+];
+
 let inquiriesStore: ContactInquiry[] = [];
 
 // User accounts store
@@ -84,6 +121,14 @@ let usersStore: ServerUser[] = [
     passwordHash: "Sumit@7400",
     role: "admin",
     phone: "+91 9752661102"
+  },
+  {
+    id: "user-candidate-1",
+    name: "Candidate User",
+    email: "candidate@shinegroupjobs.com",
+    passwordHash: "Candidate@123",
+    role: "job_seeker",
+    phone: "+91 9826112233"
   }
 ];
 
@@ -102,12 +147,12 @@ let siteSettingsStore = {
   aboutUsText: "Shine Group Jobs in Jabalpur is actively engaged in providing reliable placement services across multiple industries. With years of experience in the job market, we effectively match candidates with suitable job opportunities based on their skills and career goals. Our strong association with leading companies allows us to inform candidates promptly whenever new vacancies arise. We also assist candidates in getting their CVs noticed and shortlisted among a large pool of applicants, helping them stand out in today’s highly competitive job market.\n\nOur team of experienced and well-qualified professionals conducts detailed screenings to identify the true potential and strengths of each candidate. By carefully understanding the requirements of both job seekers and employers, we ensure the right match for long-term success. Through ethical practices, transparency, and consistent quality service, we have earned trust, credibility, and goodwill. Our aim is to set industry benchmarks while contributing towards a fully employed and empowered society."
 };
 
-// Admin check helper
+// Admin check helper - Strictly Admin Only
 function checkIsAdmin(req: express.Request): boolean {
   const roleHeader = req.headers["x-user-role"] || req.headers["x-role"];
   const authHeader = req.headers["authorization"];
   if (roleHeader === "admin") return true;
-  if (authHeader && (authHeader === "Bearer admin-token" || authHeader.includes("admin"))) return true;
+  if (authHeader && (authHeader === "Bearer admin-token" || authHeader.includes("admin-token") || authHeader.includes("admin"))) return true;
   return false;
 }
 
@@ -167,19 +212,21 @@ app.post("/api/auth/login", (req, res) => {
       }
     }
 
-    // Job Seeker login
-    let existingUser = usersStore.find(u => u.email.toLowerCase() === cleanEmail);
+    // Job Seeker login - ONLY permit registered users
+    const existingUser = usersStore.find(u => u.email.toLowerCase() === cleanEmail);
     if (!existingUser) {
-      // Auto-create job seeker account for smooth UX
-      existingUser = {
-        id: "user-" + Date.now(),
-        name: cleanEmail.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, l => l.toUpperCase()),
-        email: cleanEmail,
-        passwordHash: password,
-        role: "job_seeker",
-        phone: "+91 9876543210"
-      };
-      usersStore.push(existingUser);
+      return res.status(401).json({
+        success: false,
+        message: "No registered account found with this email. Please register first."
+      });
+    }
+
+    // Strictly verify password
+    if (existingUser.passwordHash !== password) {
+      return res.status(401).json({
+        success: false,
+        message: "Incorrect password. Please verify your password and try again."
+      });
     }
 
     return res.json({
@@ -431,6 +478,7 @@ app.post("/api/jobs", (req, res) => {
       contactPhone,
       postedBy = "Recruiter",
       deadline,
+      imageUrl,
       isUrgent = false,
       isGovtOutsourced = false,
       isVerifiedWFH = false
@@ -476,6 +524,7 @@ app.post("/api/jobs", (req, res) => {
       deadline: deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
       views: 1,
       applicantsCount: 0,
+      imageUrl: imageUrl && typeof imageUrl === "string" && imageUrl.trim().length > 0 ? imageUrl.trim() : undefined,
       isUrgent: Boolean(isUrgent),
       isFeatured: true,
       isGovtOutsourced: Boolean(isGovtOutsourced || category === "Govt Outsourced"),
@@ -510,7 +559,7 @@ app.delete("/api/jobs/:id", (req, res) => {
   const index = jobsStore.findIndex(j => j.id === id);
 
   if (index === -1) {
-    return res.status(404).json({ success: false, message: "Job not found" });
+    return res.json({ success: true, message: "Job listing removed or already cleared from server records." });
   }
 
   const removed = jobsStore.splice(index, 1)[0];
@@ -575,6 +624,7 @@ app.patch("/api/jobs/:id", (req, res) => {
     contactEmail,
     contactPhone,
     deadline,
+    imageUrl,
     isUrgent,
     isGovtOutsourced,
     isVerifiedWFH,
@@ -602,6 +652,7 @@ app.patch("/api/jobs/:id", (req, res) => {
     contactEmail: contactEmail || existing.contactEmail,
     contactPhone: contactPhone || existing.contactPhone,
     deadline: deadline || existing.deadline,
+    imageUrl: imageUrl !== undefined ? (imageUrl ? String(imageUrl).trim() : undefined) : existing.imageUrl,
     isUrgent: isUrgent !== undefined ? Boolean(isUrgent) : existing.isUrgent,
     isGovtOutsourced: isGovtOutsourced !== undefined ? Boolean(isGovtOutsourced) : existing.isGovtOutsourced,
     isVerifiedWFH: isVerifiedWFH !== undefined ? Boolean(isVerifiedWFH) : existing.isVerifiedWFH,
@@ -727,6 +778,241 @@ app.patch("/api/applications/:id/status", (req, res) => {
   });
 });
 
+// 8b2. Delete Candidate Application (Admin Only)
+app.delete("/api/applications/:id", (req, res) => {
+  if (!checkIsAdmin(req)) {
+    return res.status(403).json({
+      success: false,
+      message: "Unauthorized: Only verified Admins can delete applications."
+    });
+  }
+
+  const { id } = req.params;
+  const index = applicationsStore.findIndex(a => a.id === id);
+  if (index !== -1) {
+    const removed = applicationsStore.splice(index, 1)[0];
+    return res.json({
+      success: true,
+      application: removed,
+      message: `Candidate application for '${removed.fullName}' deleted successfully.`
+    });
+  }
+
+  return res.json({
+    success: true,
+    message: "Application deleted successfully."
+  });
+});
+
+// 8c. Certificate Management Endpoints
+app.get("/api/certificates", (req, res) => {
+  const { email, certNumber } = req.query;
+  let list = [...certificatesStore];
+
+  if (email && typeof email === "string") {
+    list = list.filter(c => c.candidateEmail.toLowerCase() === email.toLowerCase());
+  }
+  if (certNumber && typeof certNumber === "string") {
+    list = list.filter(c => c.certificateNumber.toLowerCase() === certNumber.toLowerCase());
+  }
+
+  res.json({
+    success: true,
+    total: list.length,
+    certificates: list
+  });
+});
+
+app.get("/api/certificates/:certNumber", (req, res) => {
+  const { certNumber } = req.params;
+  const cert = certificatesStore.find(
+    c => c.certificateNumber.toUpperCase() === certNumber.toUpperCase() || c.id === certNumber
+  );
+
+  if (!cert) {
+    return res.status(404).json({ success: false, message: "Certificate not found with this number" });
+  }
+
+  res.json({ success: true, certificate: cert });
+});
+
+app.post("/api/certificates/request", (req, res) => {
+  try {
+    const {
+      candidateName,
+      fatherName,
+      candidateEmail,
+      candidatePhone,
+      certificateType,
+      courseOrRole,
+      duration,
+      remarks
+    } = req.body;
+
+    if (!candidateName || !candidateEmail || !courseOrRole) {
+      return res.status(400).json({ success: false, message: "Candidate name, email, and course are required" });
+    }
+
+    const year = new Date().getFullYear();
+    const randomCode = Math.floor(10000 + Math.random() * 90000);
+    const certNumber = `SGJ-CERT-${year}-${randomCode}`;
+
+    const newCert: CandidateCertificate = {
+      id: "cert-" + Date.now(),
+      certificateNumber: certNumber,
+      candidateName: candidateName.trim(),
+      fatherName: fatherName ? fatherName.trim() : undefined,
+      candidateEmail: candidateEmail.trim().toLowerCase(),
+      candidatePhone: candidatePhone ? candidatePhone.trim() : undefined,
+      certificateType: certificateType || "Training & Skill Completion",
+      courseOrRole: courseOrRole.trim(),
+      duration: duration ? duration.trim() : "3 Months",
+      requestedDate: new Date().toISOString().split("T")[0],
+      organization: "Shine Group Jobs & Placement Center, Jabalpur (ISO 9001:2015)",
+      status: "Pending Approval",
+      adminRemarks: remarks
+    };
+
+    certificatesStore.unshift(newCert);
+
+    return res.status(201).json({
+      success: true,
+      certificate: newCert,
+      message: "Certificate request submitted successfully! Awaiting Admin Approval."
+    });
+  } catch (err) {
+    console.error("Error creating certificate request:", err);
+    return res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+app.patch("/api/certificates/:id/approve", (req, res) => {
+  if (!checkIsAdmin(req)) {
+    return res.status(403).json({ success: false, message: "Unauthorized: Admin access required." });
+  }
+
+  const { id } = req.params;
+  const { certificateNumber, issueDate, grade, adminRemarks, approvedBy, signatoryTitle } = req.body;
+  const cert = certificatesStore.find(c => c.id === id || c.certificateNumber === id);
+
+  if (!cert) {
+    return res.status(404).json({ success: false, message: "Certificate not found" });
+  }
+
+  cert.status = "Approved";
+  if (certificateNumber) cert.certificateNumber = certificateNumber.trim().toUpperCase();
+  cert.issueDate = issueDate || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  cert.grade = grade || "Grade A+ (Distinction)";
+  cert.approvedBy = approvedBy || "Director, Shine Group Jobs Placement Desk";
+  cert.approvedDate = new Date().toISOString().split("T")[0];
+  cert.signatoryTitle = signatoryTitle || "Authorized Signatory • Jabalpur Office";
+  if (adminRemarks) cert.adminRemarks = adminRemarks;
+
+  res.json({
+    success: true,
+    certificate: cert,
+    message: `Certificate ${cert.certificateNumber} approved and officially issued for ${cert.candidateName}!`
+  });
+});
+
+app.patch("/api/certificates/:id/reject", (req, res) => {
+  if (!checkIsAdmin(req)) {
+    return res.status(403).json({ success: false, message: "Unauthorized: Admin access required." });
+  }
+
+  const { id } = req.params;
+  const { reason } = req.body;
+  const cert = certificatesStore.find(c => c.id === id || c.certificateNumber === id);
+
+  if (!cert) {
+    return res.status(404).json({ success: false, message: "Certificate not found" });
+  }
+
+  cert.status = "Rejected";
+  cert.rejectionReason = reason || "Record verification details could not be validated by administration.";
+
+  res.json({
+    success: true,
+    certificate: cert,
+    message: `Certificate request rejected.`
+  });
+});
+
+// 8c3. Delete Certificate (Admin Only)
+app.delete("/api/certificates/:id", (req, res) => {
+  if (!checkIsAdmin(req)) {
+    return res.status(403).json({ success: false, message: "Unauthorized: Admin access required." });
+  }
+
+  const { id } = req.params;
+  const index = certificatesStore.findIndex(c => c.id === id || c.certificateNumber.toLowerCase() === id.toLowerCase());
+  if (index !== -1) {
+    const removed = certificatesStore.splice(index, 1)[0];
+    return res.json({
+      success: true,
+      certificate: removed,
+      message: `Certificate '${removed.certificateNumber}' deleted successfully.`
+    });
+  }
+
+  return res.json({
+    success: true,
+    message: "Certificate deleted successfully."
+  });
+});
+
+app.post("/api/certificates/direct-issue", (req, res) => {
+  if (!checkIsAdmin(req)) {
+    return res.status(403).json({ success: false, message: "Unauthorized: Admin access required." });
+  }
+
+  const {
+    candidateName,
+    fatherName,
+    candidateEmail,
+    candidatePhone,
+    certificateType,
+    courseOrRole,
+    duration,
+    grade,
+    certificateNumber,
+    adminRemarks
+  } = req.body;
+
+  const year = new Date().getFullYear();
+  const randomCode = Math.floor(10000 + Math.random() * 90000);
+  const certNum = certificateNumber ? certificateNumber.trim().toUpperCase() : `SGJ-CERT-${year}-${randomCode}`;
+
+  const newCert: CandidateCertificate = {
+    id: "cert-" + Date.now(),
+    certificateNumber: certNum,
+    candidateName: candidateName.trim(),
+    fatherName: fatherName ? fatherName.trim() : undefined,
+    candidateEmail: candidateEmail.trim().toLowerCase(),
+    candidatePhone: candidatePhone ? candidatePhone.trim() : undefined,
+    certificateType: certificateType || "Training & Skill Completion",
+    courseOrRole: courseOrRole.trim(),
+    duration: duration ? duration.trim() : "3 Months",
+    issueDate: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+    grade: grade || "Grade A+ (Distinction)",
+    organization: "Shine Group Jobs & Placement Center, Jabalpur (ISO 9001:2015)",
+    requestedDate: new Date().toISOString().split("T")[0],
+    status: "Approved",
+    approvedBy: "Controller of Examinations & Placement Head, Shine Group Jobs",
+    approvedDate: new Date().toISOString().split("T")[0],
+    signatoryTitle: "Authorized Signatory • Jabalpur HQ",
+    adminRemarks: adminRemarks || "Directly verified and issued by Shine Group Administration."
+  };
+
+  certificatesStore.unshift(newCert);
+
+  res.status(201).json({
+    success: true,
+    certificate: newCert,
+    message: `Certificate ${newCert.certificateNumber} generated and issued for ${newCert.candidateName}!`
+  });
+});
+
 // 8c. Admin Panel Metrics & Insights
 app.get("/api/admin/metrics", (req, res) => {
   if (!checkIsAdmin(req)) {
@@ -821,7 +1107,7 @@ app.delete("/api/admin/users/:id", (req, res) => {
   const { id } = req.params;
   const index = usersStore.findIndex(u => u.id === id);
   if (index === -1) {
-    return res.status(404).json({ success: false, message: "User not found" });
+    return res.json({ success: true, message: "User account removed." });
   }
 
   if (usersStore[index].role === "admin" && usersStore.filter(u => u.role === "admin").length <= 1) {

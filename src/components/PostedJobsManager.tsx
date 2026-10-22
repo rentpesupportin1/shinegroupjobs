@@ -16,7 +16,8 @@ import {
   Building,
   Laptop,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Job, JobApplication } from '../types.js';
 
@@ -39,6 +40,7 @@ export const PostedJobsManager: React.FC<PostedJobsManagerProps> = ({
 }) => {
   const [selectedJobIdForApplicants, setSelectedJobIdForApplicants] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'wfh' | 'govt'>('all');
+  const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
 
   const filteredJobs = jobs.filter(j => {
     if (filterType === 'wfh') return j.workMode === 'Remote / WFH' || j.isVerifiedWFH;
@@ -82,25 +84,17 @@ export const PostedJobsManager: React.FC<PostedJobsManagerProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {isAdmin ? (
+        {isAdmin && (
+          <div className="flex items-center gap-3">
             <button
               onClick={onOpenPostJob}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-all shadow-sm cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>+ Post New Job (Admin)</span>
+              <span>+ Post New Job (Admin Only)</span>
             </button>
-          ) : (
-            <button
-              onClick={onOpenPostJob}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer border border-slate-200"
-              title="Admin authentication required to post jobs"
-            >
-              <span>Admin Login to Post Jobs</span>
-            </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Quick stats cards */}
@@ -184,7 +178,7 @@ export const PostedJobsManager: React.FC<PostedJobsManagerProps> = ({
                 <th className="px-6 py-3.5">Salary Range</th>
                 <th className="px-6 py-3.5">Applicants</th>
                 <th className="px-6 py-3.5">Posted On</th>
-                <th className="px-6 py-3.5 text-right">Actions</th>
+                <th className="px-6 py-3.5 text-right">{isAdmin ? 'Actions (Admin Only)' : 'Details'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -198,16 +192,39 @@ export const PostedJobsManager: React.FC<PostedJobsManagerProps> = ({
                       
                       {/* Title & Company */}
                       <td className="px-6 py-4">
-                        <div className="font-semibold text-slate-900 hover:text-blue-600 cursor-pointer" onClick={() => onSelectJobForDetail(job)}>
-                          {job.title}
-                        </div>
-                        <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-                          <span className="font-medium text-slate-700">{job.company}</span>
-                          <span>•</span>
-                          <span className="flex items-center gap-0.5">
-                            <MapPin className="w-3 h-3 text-slate-400" />
-                            {job.location}
-                          </span>
+                        <div className="flex items-center gap-3">
+                          {job.imageUrl && (
+                            <div 
+                              onClick={() => onSelectJobForDetail(job)}
+                              className="w-11 h-11 rounded-xl overflow-hidden border border-slate-200 bg-slate-900 shrink-0 shadow-xs cursor-pointer hover:opacity-85 transition-opacity"
+                              title="Click to view poster"
+                            >
+                              <img 
+                                src={job.imageUrl} 
+                                alt={job.title} 
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover" 
+                              />
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-semibold text-slate-900 hover:text-blue-600 cursor-pointer flex items-center gap-1.5 flex-wrap" onClick={() => onSelectJobForDetail(job)}>
+                              <span>{job.title}</span>
+                              {job.imageUrl && (
+                                <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center gap-0.5">
+                                  <ImageIcon className="w-2.5 h-2.5" /> Photo
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                              <span className="font-medium text-slate-700">{job.company}</span>
+                              <span>•</span>
+                              <span className="flex items-center gap-0.5">
+                                <MapPin className="w-3 h-3 text-slate-400" />
+                                {job.location}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </td>
 
@@ -261,17 +278,15 @@ export const PostedJobsManager: React.FC<PostedJobsManagerProps> = ({
                             <Eye className="w-4 h-4" />
                           </button>
                           
-                          <button
-                            onClick={() => {
-                              if (confirm(`Are you sure you want to remove the posting for '${job.title}'?`)) {
-                                onDeleteJob(job.id);
-                              }
-                            }}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="Remove Posting"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => setJobToDelete(job)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                              title="Delete Posting (Admin Only)"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
 
@@ -336,6 +351,48 @@ export const PostedJobsManager: React.FC<PostedJobsManagerProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Safe In-App Confirmation Modal for Deleting Job Post */}
+      {jobToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">
+              Delete Job Posting?
+            </h3>
+            <p className="text-sm text-slate-600 mb-3 leading-relaxed">
+              Are you sure you want to remove the posting for <strong className="text-slate-900 font-semibold">{jobToDelete.title}</strong>? This job vacancy will be permanently deleted and removed from the portal.
+            </p>
+            <div className="p-3 mb-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-800 break-words flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0"></span>
+              <span className="truncate">{jobToDelete.title} • {jobToDelete.company}</span>
+            </div>
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setJobToDelete(null)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold text-xs cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const id = jobToDelete.id;
+                  setJobToDelete(null);
+                  onDeleteJob(id);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-xs shadow-md shadow-rose-600/20 cursor-pointer transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Yes, Delete Vacancy</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -117,15 +117,15 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             <button
               onClick={() => handleTabClick('applications')}
-              className={`px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+              className={`px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeTab === 'applications'
                   ? 'bg-white text-emerald-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
               }`}
             >
-              My Applications
+              <span>My Applications & Certificates</span>
               {applicationsCount > 0 && (
-                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-bold">
+                <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 text-emerald-800 font-bold">
                   {applicationsCount}
                 </span>
               )}
@@ -278,7 +278,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 activeTab === 'applications' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-700 hover:bg-slate-50'
               }`}
             >
-              <span>My Applications</span>
+              <span>My Applications & Certificates</span>
               {applicationsCount > 0 && (
                 <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-100 text-emerald-800 font-bold">
                   {applicationsCount}

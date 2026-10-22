@@ -122,7 +122,10 @@ export default function App() {
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.jobs && Array.isArray(data.jobs)) {
-          setJobs(data.jobs);
+          const deletedRaw = localStorage.getItem('shine_deleted_job_ids');
+          const deletedIds: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+          const activeJobs = data.jobs.filter((j: Job) => !deletedIds.includes(j.id));
+          setJobs(activeJobs);
           return;
         }
       }
@@ -338,34 +341,31 @@ export default function App() {
     setActiveTab('posted-jobs');
   };
 
-  // Handle delete job
+  // Handle delete job (Admin Only)
   const handleDeleteJob = async (jobId: string) => {
     if (currentUser?.role !== 'admin') {
-      alert('Only administrators can delete job listings.');
+      console.warn('Unauthorized attempt to delete job: only verified admin is permitted.');
+      handleOpenAuthModal('admin');
       return;
     }
 
+    // 1. Immediately update UI and local persistence
+    deleteLocalJob(jobId);
+    setJobs(prev => prev.filter(j => j.id !== jobId));
+    setSelectedJobForDetail(prev => (prev?.id === jobId ? null : prev));
+
+    // 2. Synchronize with backend API
     try {
-      const res = await fetch(`/api/jobs/${jobId}`, {
+      await fetch(`/api/jobs/${jobId}`, {
         method: 'DELETE',
         headers: {
           'x-user-role': 'admin',
           'Authorization': 'Bearer admin-token'
         }
       });
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
-        const data = await res.json();
-        if (!data.success) {
-          alert(data.message || 'Could not delete job.');
-          return;
-        }
-      }
     } catch (e) {
       console.warn('Backend DELETE error, using local fallback:', e);
     }
-    deleteLocalJob(jobId);
-    setJobs(prev => prev.filter(j => j.id !== jobId));
   };
 
   const handleHeroSearch = (query: string, category: string, workMode: string) => {
@@ -526,6 +526,7 @@ export default function App() {
             onRefreshApplications={fetchApplications}
             onRefreshSettings={fetchSettings}
             onSelectJob={(job) => setSelectedJobForDetail(job)}
+            onDeleteJob={handleDeleteJob}
           />
         )}
 
@@ -555,6 +556,8 @@ export default function App() {
         }}
         isSaved={selectedJobForDetail ? savedJobIds.includes(selectedJobForDetail.id) : false}
         onToggleSave={handleToggleSaveJob}
+        isAdmin={currentUser?.role === 'admin'}
+        onDeleteJob={handleDeleteJob}
       />
 
       <ApplyModal
@@ -569,6 +572,7 @@ export default function App() {
         isOpen={isPostJobModalOpen}
         onClose={() => setIsPostJobModalOpen(false)}
         onJobPosted={handleJobPosted}
+        currentUser={currentUser}
       />
 
       {/* AI Resume Matcher */}

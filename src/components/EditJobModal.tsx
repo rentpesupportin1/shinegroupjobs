@@ -9,7 +9,11 @@ import {
   AlertCircle, 
   CheckCircle2,
   Building2,
-  Clock
+  Clock,
+  Image as ImageIcon,
+  UploadCloud,
+  FileImage,
+  Trash2
 } from 'lucide-react';
 import { Job } from '../types.js';
 import { updateLocalCustomJob } from '../utils/localPersistence.js';
@@ -28,6 +32,8 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
   onJobUpdated
 }) => {
   const [formData, setFormData] = useState<Partial<Job>>({});
+  const [imageMeta, setImageMeta] = useState<{ name: string; size: number } | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -49,15 +55,52 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
         description: job.description,
         contactEmail: job.contactEmail,
         contactPhone: job.contactPhone,
+        imageUrl: job.imageUrl || '',
         status: job.status,
         isUrgent: job.isUrgent,
         isGovtOutsourced: job.isGovtOutsourced,
         isVerifiedWFH: job.isVerifiedWFH
       });
+      setImageMeta(job.imageUrl ? { name: 'Current_Job_Poster.jpg', size: 0 } : null);
+      setImageError(null);
       setErrorMsg('');
       setSuccessMsg('');
     }
   }, [job]);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImageError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const maxSizeBytes = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSizeBytes) {
+      setImageError(`Selected image is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum allowed size is 50 MB.`);
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setImageError('Please select a valid image file (PNG, JPG, JPEG, WEBP, GIF, SVG).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setFormData(prev => ({ ...prev, imageUrl: result }));
+      setImageMeta({ name: file.name, size: file.size });
+    };
+    reader.onerror = () => {
+      setImageError('Failed to read image file. Please try again.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setFormData(prev => ({ ...prev, imageUrl: '' }));
+    setImageMeta(null);
+    setImageError(null);
+  };
 
   if (!isOpen || !job) return null;
 
@@ -173,6 +216,91 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
               <span>{successMsg}</span>
             </div>
           )}
+
+          {/* Photo / Poster Upload Section (Max 50MB) */}
+          <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 border-2 border-dashed border-blue-300">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center">
+                  <ImageIcon className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                    <span>Job / Hiring Poster Image</span>
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-extrabold bg-blue-100 text-blue-800">
+                      Supports up to 50 MB
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Displayed at the top of the job post. Remove image to display job details only.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {imageError && (
+              <div className="mt-2 p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                <span>{imageError}</span>
+              </div>
+            )}
+
+            {formData.imageUrl ? (
+              <div className="mt-2.5 relative rounded-xl overflow-hidden border border-slate-200 bg-slate-950">
+                <img
+                  src={formData.imageUrl}
+                  alt="Current job poster"
+                  referrerPolicy="no-referrer"
+                  className="w-full max-h-56 object-contain mx-auto"
+                />
+                <div className="p-2.5 bg-slate-900 text-white flex items-center justify-between flex-wrap gap-2 text-xs border-t border-slate-800">
+                  <div className="flex items-center gap-1.5">
+                    <FileImage className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="font-semibold truncate max-w-[200px]">
+                      {imageMeta?.name || 'Attached_Poster.jpg'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer">
+                      <span>Replace</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageChange}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="px-2.5 py-1 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2">
+                <label className="flex flex-col items-center justify-center p-4 rounded-xl border border-slate-300/80 bg-white hover:bg-blue-50/40 cursor-pointer transition-all group">
+                  <UploadCloud className="w-6 h-6 text-blue-500 group-hover:scale-110 transition-transform mb-1" />
+                  <span className="text-xs font-bold text-slate-800 group-hover:text-blue-600">
+                    Click to attach hiring poster image
+                  </span>
+                  <span className="text-[11px] text-slate-400">
+                    Up to 50 Megabytes (50 MB) • Optional
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageChange}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

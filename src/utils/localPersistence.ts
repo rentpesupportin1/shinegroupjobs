@@ -1,4 +1,4 @@
-import { Job, JobApplication, WebsiteSettings, User } from '../types.js';
+import { Job, JobApplication, WebsiteSettings, User, CandidateCertificate, CertificateStatus } from '../types.js';
 import { INITIAL_JOBS } from '../data/initialJobs.js';
 
 export const INITIAL_APPLICATIONS: JobApplication[] = [
@@ -18,7 +18,13 @@ export const INITIAL_APPLICATIONS: JobApplication[] = [
     resumeUrlOrSummary: "B.Com with DCA certification. 1.5 yrs experience in citizen registry data entry at local MP Online kiosk.",
     coverNote: "Ready to join immediately. Proficient in Mangal font typing and Samagra database verification.",
     appliedDate: "2026-09-11",
-    status: "Shortlisted"
+    status: "Shortlisted",
+    resumeFile: {
+      name: "Rahul_Shrivastava_Resume.pdf",
+      size: 148500,
+      type: "application/pdf",
+      dataUrl: "data:application/pdf;base64,JVBERi0xLjQKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgNjEyIDc5Ml0vQ29udGVudHMgNCAwIFIvUmVzb3VyY2VzPDwvRm9udDw8L0YxIDUgMCBSPj4+Pj4+ZW5kb2JqCjQgMCBvYmo8PC9MZW5ndGggMTI4Pj5zdHJlYW0KQlQKL0YxIDIwIFRmCjcwIDcwMCBUZAooUmFodWwgU2hyaXZhc3RhdmEgLSBDYW5kaWRhdGUgUmVzdW1lKSBUagogLTMwIC0zMCBUZAovRjEgMTIgVGYKKEUtR292ZXJuYW5jZSBEYXRhIEFuYWx5c3QgJiBPcGVyYXRvciAtIFNoaW5lIEdyb3VwIEpvYnMpIFRqCkVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iajw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+ZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAowMDAwMDAwMDU4IDAwMDAwIG4gCjAwMDAwMDAxMTUgMDAwMDAgbiAKMDAwMDAwMDIyMSAwMDAwMCBuIAowMDAwMDAwNDAxIDAwMDAwIG4gCnRyYWlsZXIKPDwvU2l6ZSA2L1Jvb3QgMSAwIFI+PgpzdGFydHhyZWYKNDY4CiUlRU9GCg=="
+    }
   },
   {
     id: "app-1002",
@@ -81,6 +87,14 @@ export function getStoredUsers(): StoredUserRecord[] {
       password: "Sumit@7400",
       role: "admin",
       phone: "+91 9752661102"
+    },
+    {
+      id: "user-candidate-1",
+      name: "Candidate User",
+      email: "candidate@shinegroupjobs.com",
+      password: "Candidate@123",
+      role: "job_seeker",
+      phone: "+91 9826112233"
     }
   ];
 }
@@ -112,59 +126,35 @@ export function offlineAuthLogin(email: string, password: string, role?: string)
     }
   }
 
-  // Job Seeker Login
+  // Job Seeker Login - ONLY permit registered accounts
   const users = getStoredUsers();
   const found = users.find(u => u.email.toLowerCase() === cleanEmail);
 
-  if (found) {
-    if (found.password && found.password !== password) {
-      return {
-        success: false,
-        message: "Incorrect password. Please verify and try again."
-      };
-    }
+  if (!found) {
     return {
-      success: true,
-      user: {
-        id: found.id,
-        name: found.name,
-        email: found.email,
-        role: found.role,
-        phone: found.phone,
-        token: "user-token-" + Date.now()
-      },
-      message: "Successfully logged in!"
+      success: false,
+      message: "No registered account found with this email. Please register first to create an account."
     };
   }
 
-  // If first time candidate signing in, auto-create candidate account for seamless UX
-  const newCandidate: StoredUserRecord = {
-    id: "user-" + Date.now(),
-    name: cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    email: cleanEmail,
-    password: password,
-    role: "job_seeker",
-    phone: "+91 9876543210"
-  };
-
-  try {
-    const updated = [...users, newCandidate];
-    localStorage.setItem('shine_registered_users', JSON.stringify(updated));
-  } catch (e) {
-    console.error('Error saving new candidate:', e);
+  if (found.password && found.password !== password) {
+    return {
+      success: false,
+      message: "Incorrect password. Please verify your password and try again."
+    };
   }
 
   return {
     success: true,
     user: {
-      id: newCandidate.id,
-      name: newCandidate.name,
-      email: newCandidate.email,
-      role: newCandidate.role,
-      phone: newCandidate.phone,
+      id: found.id,
+      name: found.name,
+      email: found.email,
+      role: found.role,
+      phone: found.phone,
       token: "user-token-" + Date.now()
     },
-    message: "Successfully logged in as candidate!"
+    message: "Successfully logged in!"
   };
 }
 
@@ -228,6 +218,21 @@ export function offlineAuthRegister(
   };
 }
 
+export function deleteLocalUser(userId: string): void {
+  try {
+    const raw = localStorage.getItem('shine_registered_users');
+    if (raw) {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) {
+        const filtered = list.filter((u: any) => u.id !== userId);
+        localStorage.setItem('shine_registered_users', JSON.stringify(filtered));
+      }
+    }
+  } catch (e) {
+    console.error('Error deleting local user:', e);
+  }
+}
+
 // ---------------- JOBS STORAGE HELPERS ---------------- //
 
 export function getStoredJobs(): Job[] {
@@ -286,6 +291,7 @@ export function saveLocalCustomJob(jobData: Partial<Job>): Job {
     deadline: jobData.deadline || "",
     views: 12,
     applicantsCount: 0,
+    imageUrl: jobData.imageUrl,
     isUrgent: !!jobData.isUrgent,
     isFeatured: !!jobData.isFeatured,
     isGovtOutsourced: !!jobData.isGovtOutsourced,
@@ -410,6 +416,16 @@ export function updateLocalApplicationStatus(appId: string, status: JobApplicati
   }
 }
 
+export function deleteLocalApplication(appId: string): void {
+  try {
+    const current = getStoredApplications();
+    const updated = current.filter(a => a.id !== appId);
+    localStorage.setItem('shine_stored_applications', JSON.stringify(updated));
+  } catch (e) {
+    console.error('Error deleting application locally:', e);
+  }
+}
+
 // ---------------- SITE SETTINGS STORAGE HELPERS ---------------- //
 
 export function getStoredSettings(): WebsiteSettings {
@@ -431,3 +447,246 @@ export function saveStoredSettings(settings: WebsiteSettings): void {
     console.error('Error saving site settings:', e);
   }
 }
+
+// ---------------- CERTIFICATE GENERATOR & VERIFICATION HELPERS ---------------- //
+
+export const INITIAL_CERTIFICATES: CandidateCertificate[] = [
+  {
+    id: "cert-101",
+    certificateNumber: "SGJ-CERT-2026-10492",
+    candidateName: "Rahul Shrivastava",
+    fatherName: "Shri Ramesh Shrivastava",
+    candidateEmail: "rahul.shrivastava@example.com",
+    candidatePhone: "+91 9826112233",
+    certificateType: "Training & Skill Completion",
+    courseOrRole: "Advanced Office Operations, e-Governance & Citizen Portal Management",
+    duration: "3 Months (July 2026 - September 2026)",
+    issueDate: "10 October 2026",
+    grade: "Grade A+ (Distinction)",
+    organization: "Shine Group Jobs & Placement Center, Jabalpur (ISO 9001:2015)",
+    requestedDate: "2026-10-08",
+    status: "Approved",
+    approvedBy: "Placement Director & Controller, Shine Group Jobs",
+    approvedDate: "2026-10-10",
+    signatoryTitle: "Authorized Signatory • Shine Group Jabalpur",
+    adminRemarks: "Completed all practical assignments with distinction. Recommended for state e-mission roles."
+  },
+  {
+    id: "cert-102",
+    certificateNumber: "SGJ-CERT-2026-20381",
+    candidateName: "Priya Tiwari",
+    fatherName: "Shri Alok Tiwari",
+    candidateEmail: "priya.t@example.com",
+    candidatePhone: "+91 9407334455",
+    certificateType: "Internship Completion",
+    courseOrRole: "Data Quality, MIS Indexing & Remote Operations Specialist",
+    duration: "6 Months (April 2026 - September 2026)",
+    requestedDate: "2026-10-12",
+    status: "Pending Approval",
+    organization: "Shine Group Jobs & Placement Center, Jabalpur (ISO 9001:2015)"
+  }
+];
+
+export function generateUniqueCertNumber(): string {
+  const year = new Date().getFullYear();
+  let num = '';
+  let exists = true;
+  const certificates = getStoredCertificates();
+  
+  // Ensure unique number
+  while (exists) {
+    const randomCode = Math.floor(10000 + Math.random() * 90000);
+    num = `SGJ-CERT-${year}-${randomCode}`;
+    exists = certificates.some(c => c.certificateNumber.toUpperCase() === num.toUpperCase());
+  }
+  return num;
+}
+
+export function getStoredCertificates(): CandidateCertificate[] {
+  try {
+    const raw = localStorage.getItem('shine_certificates');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Error reading stored certificates:', e);
+  }
+  return INITIAL_CERTIFICATES;
+}
+
+export function saveCertificateRequest(data: {
+  candidateName: string;
+  fatherName?: string;
+  candidateEmail: string;
+  candidatePhone?: string;
+  certificateType: CandidateCertificate['certificateType'];
+  courseOrRole: string;
+  duration: string;
+  remarks?: string;
+}): CandidateCertificate {
+  const certNumber = generateUniqueCertNumber();
+  const newCert: CandidateCertificate = {
+    id: "cert-" + Date.now(),
+    certificateNumber: certNumber,
+    candidateName: data.candidateName.trim(),
+    fatherName: data.fatherName ? data.fatherName.trim() : undefined,
+    candidateEmail: data.candidateEmail.trim().toLowerCase(),
+    candidatePhone: data.candidatePhone ? data.candidatePhone.trim() : undefined,
+    certificateType: data.certificateType,
+    courseOrRole: data.courseOrRole.trim(),
+    duration: data.duration.trim(),
+    requestedDate: new Date().toISOString().split('T')[0],
+    organization: "Shine Group Jobs & Placement Center, Jabalpur (ISO 9001:2015)",
+    status: "Pending Approval",
+    adminRemarks: data.remarks
+  };
+
+  try {
+    const current = getStoredCertificates();
+    const updated = [newCert, ...current];
+    localStorage.setItem('shine_certificates', JSON.stringify(updated));
+  } catch (e) {
+    console.error('Error saving certificate request:', e);
+  }
+
+  return newCert;
+}
+
+export function approveCertificate(
+  certId: string, 
+  approvalData: {
+    certificateNumber?: string;
+    issueDate?: string;
+    grade?: string;
+    adminRemarks?: string;
+    approvedBy?: string;
+    signatoryTitle?: string;
+  }
+): CandidateCertificate | null {
+  try {
+    const current = getStoredCertificates();
+    const index = current.findIndex(c => c.id === certId);
+    if (index === -1) return null;
+
+    const cert = current[index];
+    const todayFormatted = new Date().toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const updatedCert: CandidateCertificate = {
+      ...cert,
+      certificateNumber: approvalData.certificateNumber || cert.certificateNumber || generateUniqueCertNumber(),
+      issueDate: approvalData.issueDate || todayFormatted,
+      grade: approvalData.grade || "Grade A (Excellent)",
+      adminRemarks: approvalData.adminRemarks || cert.adminRemarks,
+      approvedBy: approvalData.approvedBy || "Director, Shine Group Jobs Placement Desk",
+      approvedDate: new Date().toISOString().split('T')[0],
+      signatoryTitle: approvalData.signatoryTitle || "Authorized Signatory • Jabalpur Office",
+      status: "Approved"
+    };
+
+    current[index] = updatedCert;
+    localStorage.setItem('shine_certificates', JSON.stringify(current));
+    return updatedCert;
+  } catch (e) {
+    console.error('Error approving certificate:', e);
+    return null;
+  }
+}
+
+export function rejectCertificate(certId: string, reason: string): CandidateCertificate | null {
+  try {
+    const current = getStoredCertificates();
+    const index = current.findIndex(c => c.id === certId);
+    if (index === -1) return null;
+
+    const cert = current[index];
+    const updatedCert: CandidateCertificate = {
+      ...cert,
+      status: "Rejected",
+      rejectionReason: reason || "Record verification details could not be validated by administration."
+    };
+
+    current[index] = updatedCert;
+    localStorage.setItem('shine_certificates', JSON.stringify(current));
+    return updatedCert;
+  } catch (e) {
+    console.error('Error rejecting certificate:', e);
+    return null;
+  }
+}
+
+export function adminDirectIssueCertificate(data: {
+  candidateName: string;
+  fatherName?: string;
+  candidateEmail: string;
+  candidatePhone?: string;
+  certificateType: CandidateCertificate['certificateType'];
+  courseOrRole: string;
+  duration: string;
+  grade?: string;
+  issueDate?: string;
+  certificateNumber?: string;
+  adminRemarks?: string;
+}): CandidateCertificate {
+  const certNumber = data.certificateNumber?.trim() || generateUniqueCertNumber();
+  const todayFormatted = new Date().toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+
+  const newCert: CandidateCertificate = {
+    id: "cert-" + Date.now(),
+    certificateNumber: certNumber,
+    candidateName: data.candidateName.trim(),
+    fatherName: data.fatherName ? data.fatherName.trim() : undefined,
+    candidateEmail: data.candidateEmail.trim().toLowerCase(),
+    candidatePhone: data.candidatePhone ? data.candidatePhone.trim() : undefined,
+    certificateType: data.certificateType,
+    courseOrRole: data.courseOrRole.trim(),
+    duration: data.duration.trim(),
+    issueDate: data.issueDate || todayFormatted,
+    grade: data.grade || "Grade A+ (Distinction)",
+    organization: "Shine Group Jobs & Placement Center, Jabalpur (ISO 9001:2015)",
+    requestedDate: new Date().toISOString().split('T')[0],
+    status: "Approved",
+    approvedBy: "Controller of Examinations & Placement Head, Shine Group Jobs",
+    approvedDate: new Date().toISOString().split('T')[0],
+    signatoryTitle: "Authorized Signatory • Jabalpur HQ",
+    adminRemarks: data.adminRemarks || "Directly verified and issued by Shine Group Administration."
+  };
+
+  try {
+    const current = getStoredCertificates();
+    const updated = [newCert, ...current];
+    localStorage.setItem('shine_certificates', JSON.stringify(updated));
+  } catch (e) {
+    console.error('Error creating direct certificate:', e);
+  }
+
+  return newCert;
+}
+
+export function deleteLocalCertificate(certId: string): void {
+  try {
+    const current = getStoredCertificates();
+    const updated = current.filter(c => c.id !== certId);
+    localStorage.setItem('shine_certificates', JSON.stringify(updated));
+  } catch (e) {
+    console.error('Error deleting certificate:', e);
+  }
+}
+
+export function findCertificateByNumber(certNumber: string): CandidateCertificate | undefined {
+  if (!certNumber) return undefined;
+  const clean = certNumber.trim().toUpperCase();
+  const list = getStoredCertificates();
+  return list.find(c => c.certificateNumber.trim().toUpperCase() === clean);
+}
+

@@ -13,7 +13,7 @@ import {
   Shield
 } from 'lucide-react';
 import { User, UserRole } from '../types.js';
-import { offlineAuthLogin, offlineAuthRegister } from '../utils/localPersistence.js';
+import { offlineAuthLogin, offlineAuthRegister, getStoredUsers } from '../utils/localPersistence.js';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -62,29 +62,62 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         body: JSON.stringify(payload)
       });
       const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      if (contentType.includes('application/json')) {
         const data = await res.json();
         authResponse = data;
       }
     } catch (networkErr) {
-      // Backend not running (Netlify static deployment or offline)
       console.warn('Backend server not reachable, switching to client auth fallback:', networkErr);
     }
 
-    // If server was not reachable or returned non-JSON / 404 (Netlify static host)
-    if (!authResponse) {
-      if (isRegister) {
-        authResponse = offlineAuthRegister(name, email, password, phone, activeTab, adminPasscode);
-      } else {
-        authResponse = offlineAuthLogin(email, password, activeTab);
+    // If server was not reachable or returned 401 on login, verify with local registered storage
+    if (!authResponse || (!authResponse.success && !isRegister)) {
+      const localCheck = offlineAuthLogin(email, password, activeTab);
+      if (localCheck.success && localCheck.user) {
+        authResponse = localCheck;
+        // Re-sync registered user to backend in background if missing
+        fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: localCheck.user.name,
+            email: localCheck.user.email,
+            password: password,
+            phone: localCheck.user.phone,
+            role: localCheck.user.role
+          })
+        }).catch(() => {});
+      } else if (!authResponse) {
+        authResponse = localCheck;
       }
+    } else if (!authResponse && isRegister) {
+      authResponse = offlineAuthRegister(name, email, password, phone, activeTab, adminPasscode);
     }
 
     if (authResponse && authResponse.success && authResponse.user) {
+      if (isRegister) {
+        try {
+          const stored = getStoredUsers();
+          if (!stored.some(u => u.email.toLowerCase() === email.trim().toLowerCase())) {
+            const newRecord = {
+              id: authResponse.user.id,
+              name: authResponse.user.name,
+              email: authResponse.user.email,
+              password: password,
+              phone: authResponse.user.phone || phone,
+              role: authResponse.user.role
+            };
+            localStorage.setItem('shine_registered_users', JSON.stringify([...stored, newRecord]));
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
       onLoginSuccess(authResponse.user);
       onClose();
     } else {
-      setError(authResponse?.message || 'Authentication failed. Please check your credentials.');
+      setError(authResponse?.message || (isRegister ? 'Registration failed. Please check your inputs.' : 'Invalid email or password. Please register first if you do not have an account.'));
     }
     setLoading(false);
   };
