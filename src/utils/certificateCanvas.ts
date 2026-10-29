@@ -368,7 +368,7 @@ export function generateCertificateDataUrl(certificate: CandidateCertificate): s
 
   ctx.font = '11px monospace';
   ctx.fillStyle = '#64748b';
-  ctx.fillText('verify.shinegroupjobs.com', sealX, footerY + 120);
+  ctx.fillText('admin@shinegroupjob.com', sealX, footerY + 120);
 
   // 13. Footer Right: Signature Designation
   ctx.textAlign = 'right';

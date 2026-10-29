@@ -592,7 +592,7 @@ export default function App() {
       />
 
       {/* Floating WhatsApp Placement Helpline */}
-      <div className="fixed bottom-6 right-6 z-40 flex items-center gap-2 group">
+      <div className="fixed bottom-24 right-6 z-40 flex items-center gap-2 group">
         <span className="hidden group-hover:inline-block bg-slate-900 text-white text-xs font-bold py-1.5 px-3 rounded-xl shadow-lg border border-slate-700 animate-in fade-in slide-in-from-right duration-200">
           Chat on WhatsApp: {websiteSettings.helplinePhone}
         </span>

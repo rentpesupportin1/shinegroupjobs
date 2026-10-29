@@ -373,7 +373,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     </div>
                     <div className="mt-1 flex items-center gap-1 text-[8px] sm:text-[9px] text-slate-600 font-mono font-medium">
                       <QrCode className="w-3 h-3 text-slate-700 shrink-0" />
-                      <span>verify.shinegroupjobs.com</span>
+                      <span>admin@shinegroupjob.com</span>
                     </div>
                   </div>
 
