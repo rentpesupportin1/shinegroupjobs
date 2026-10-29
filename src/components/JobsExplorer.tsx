@@ -342,11 +342,11 @@ export const JobsExplorer: React.FC<JobsExplorerProps> = ({
                   Need help applying or finding matching jobs in Jabalpur?
                 </p>
                 <a
-                  href="tel:+919752661102"
+                  href="tel:+919039881102"
                   className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors cursor-pointer text-center flex items-center justify-center gap-1.5"
                 >
                   <Phone className="w-3.5 h-3.5" />
-                  <span>Call +91 9752661102</span>
+                  <span>Call +91 9039881102</span>
                 </a>
               </div>
             </div>

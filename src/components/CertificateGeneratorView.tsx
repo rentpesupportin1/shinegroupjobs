@@ -167,7 +167,7 @@ export const CertificateGeneratorView: React.FC<CertificateGeneratorViewProps> =
             </div>
             
             <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-display text-white">
-              Official Certificate Generator & Verification
+              Certificate Generator & Verification
             </h2>
             
             <p className="text-sm text-slate-300 leading-relaxed">
@@ -324,10 +324,10 @@ export const CertificateGeneratorView: React.FC<CertificateGeneratorViewProps> =
                 <span>Step 1 of 2: Candidate Submission</span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 mt-1 font-display">
-                Request Official Certificate Generation
+                Request Certificate Generation
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Form submit karne ke baad ye request Shine Group Admin ke paas approval ke liye jayegi. Admin approve karega tab official certificate ready hoga.
+                Form submit karne ke baad ye request Shine Group Admin ke paas approval ke liye jayegi. Admin approve karega tab certificate ready hoga.
               </p>
             </div>
             <button
@@ -405,7 +405,7 @@ export const CertificateGeneratorView: React.FC<CertificateGeneratorViewProps> =
                     name="candidatePhone"
                     value={formData.candidatePhone}
                     onChange={handleFormChange}
-                    placeholder="+91 9752661102"
+                    placeholder="+91 9039881102"
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -463,7 +463,7 @@ export const CertificateGeneratorView: React.FC<CertificateGeneratorViewProps> =
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <p className="text-[11px] text-slate-500 mt-1">
-                Yahi role title aapke official certificate par prominently print hoga.
+                Yahi role title aapke certificate par prominently print hoga.
               </p>
             </div>
 

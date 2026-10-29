@@ -60,7 +60,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
       <div className="max-w-6xl mx-auto relative z-10">
         
-        {/* Official Brand Identity Showcase */}
+        {/* Brand Identity Showcase */}
         <div className="flex justify-center mb-6">
           <div className="relative group inline-flex items-center p-1.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-2xl hover:scale-105 transition-all duration-300">
             <img
@@ -86,7 +86,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-xs font-semibold backdrop-blur-md shadow-xs">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-            <span>100% Free for Job Seekers (₹0 Fee)</span>
+            <span>100% job placement guarantee</span>
           </div>
         </div>
 
@@ -96,7 +96,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             Find Verified Jobs with <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-amber-300 bg-clip-text text-transparent">Shine Group Jobs</span>
           </h1>
           <p className="mt-4 text-base sm:text-lg text-slate-300 max-w-2xl mx-auto font-normal leading-relaxed">
-            Madhya Pradesh's leading placement consultancy for <span className="text-emerald-300 font-semibold">100% Genuine Work From Home</span>, authorized <span className="text-amber-300 font-semibold">Government Outsourced Staffing</span>, IT, and Corporate Careers.
+            Madhya Pradesh's leading placement consultancy for <span className="text-emerald-300 font-semibold">100% Genuine Work From Home</span>, <span className="text-amber-300 font-semibold">Government Outsourced Staffing</span>, IT, and Corporate Careers.
           </p>
           <p className="mt-1 text-xs sm:text-sm text-slate-400 font-medium">
             (सीधी भर्ती • सरकारी आउटसोर्सिंग • प्रमाणित घर बैठे कार्य • जबलपुर एवं पूरे भारत में)
@@ -218,7 +218,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             <p className="text-xs sm:text-sm text-slate-300 font-medium mt-0.5">
               Govt Outsource Posts
             </p>
-            <span className="text-[10px] text-slate-400">Authorized Vendor</span>
+            <span className="text-[10px] text-slate-400">job placement</span>
           </div>
 
           <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/70 rounded-2xl p-4 text-center hover:border-slate-600 transition-colors">

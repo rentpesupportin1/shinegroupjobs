@@ -53,7 +53,7 @@ export const ApplicationsTracker: React.FC<ApplicationsTrackerProps> = ({
             </span>
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Manage your submitted candidatures, saved vacancies, and official certificate requests.
+            Manage your submitted candidatures, saved vacancies, and certificate requests.
           </p>
         </div>
 
@@ -332,7 +332,7 @@ export const ApplicationsTracker: React.FC<ApplicationsTrackerProps> = ({
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     <span>In Review by Placement Desk</span>
                   </div>
-                  <span className="text-[11px]">Contact: +91 9752661102</span>
+                  <span className="text-[11px]">Contact: +91 9039881102</span>
                 </div>
               </div>
             ))}

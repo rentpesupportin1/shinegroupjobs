@@ -108,7 +108,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     issueDate: '',
     grade: 'Grade A+ (Distinction)',
     approvedBy: 'Director, Shine Group Jobs Placement Desk',
-    signatoryTitle: 'Authorized Signatory • Jabalpur Office',
+    signatoryTitle: 'Placement Director • Jabalpur Office',
     adminRemarks: ''
   });
 
@@ -226,7 +226,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     return (
       <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
         <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-12 shadow-2xl relative overflow-hidden max-w-lg w-full text-center">
-          {/* Official Brand Logo */}
+          {/* Brand Logo */}
           <div className="flex justify-center mb-5">
             <div className="relative overflow-hidden rounded-2xl shadow-xl border border-red-700/50 bg-[#c40011] hover:scale-105 transition-transform">
               <img
@@ -246,7 +246,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             Shine Group Admin Portal
           </h2>
           <p className="mt-3 text-xs sm:text-sm text-slate-600 leading-relaxed">
-            Welcome to the internal administration portal. Only authorized placement officers can manage vacancies, view candidate profiles, and update website settings.
+            Welcome to the internal administration portal. Only placement administrators can manage vacancies, view candidate profiles, and update website settings.
           </p>
 
           <div className="mt-8 space-y-3">
@@ -269,7 +269,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           <div className="mt-6 p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-500 text-center">
             <p className="font-semibold text-slate-700">Restricted Shine Group Admin Portal</p>
-            <p className="mt-0.5 text-slate-500 text-[11px]">Authorized administration and recruitment staff only.</p>
+            <p className="mt-0.5 text-slate-500 text-[11px]">Administration and recruitment staff only.</p>
           </div>
         </div>
       </div>
@@ -519,7 +519,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       issueDate: cert.issueDate || todayFormatted,
       grade: cert.grade || 'Grade A+ (Distinction)',
       approvedBy: cert.approvedBy || 'Director, Shine Group Jobs Placement Desk',
-      signatoryTitle: cert.signatoryTitle || 'Authorized Signatory • Jabalpur Office',
+      signatoryTitle: cert.signatoryTitle || 'Placement Director • Jabalpur Office',
       adminRemarks: cert.adminRemarks || 'Verified and approved after candidate examination.'
     });
   };
@@ -543,7 +543,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
     const updated = approveCertificate(reviewingCert.id, approvalForm);
     if (updated) {
-      setFeedbackMessage(`Certificate ${updated.certificateNumber} officially approved & issued for ${updated.candidateName}!`);
+      setFeedbackMessage(`Certificate ${updated.certificateNumber} approved & issued for ${updated.candidateName}!`);
       refreshCertificates();
       setReviewingCert(null);
       setTimeout(() => setFeedbackMessage(null), 4000);
@@ -603,7 +603,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
 
     const newCert = adminDirectIssueCertificate(directIssueForm);
-    setFeedbackMessage(`Official certificate ${newCert.certificateNumber} generated and issued for ${newCert.candidateName}!`);
+    setFeedbackMessage(`Certificate ${newCert.certificateNumber} generated and issued for ${newCert.candidateName}!`);
     refreshCertificates();
     setIsDirectIssueOpen(false);
     setDirectIssueForm({
@@ -1761,7 +1761,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <span>ISO 9001:2015 Certification Controller</span>
                   </div>
                   <h3 className="text-xl font-bold tracking-tight text-slate-900 font-display">
-                    Official Certificates & Admin Approval Desk
+                    Certificates & Admin Approval Desk
                   </h3>
                   <p className="text-xs text-slate-500 mt-1">
                     Review and approve candidate certificate requests. Har certificate ka unique number hota hai jisse aap turant find aur verify kar sakte hain.
@@ -1817,7 +1817,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div className="text-2xl font-black text-emerald-600 mt-1">
                     {certificates.filter(c => c.status === 'Approved').length}
                   </div>
-                  <span className="text-[10px] text-emerald-700">Official digital certificates</span>
+                  <span className="text-[10px] text-emerald-700">Verified digital certificates</span>
                 </div>
 
                 <div 
@@ -2011,7 +2011,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   <button
                                     onClick={() => setSelectedCertForPrint(cert)}
                                     className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-amber-300 font-semibold text-xs flex items-center gap-1 shadow-xs cursor-pointer"
-                                    title="View & Print Official Certificate"
+                                    title="View & Print Certificate"
                                   >
                                     <Printer className="w-3.5 h-3.5 text-amber-400" />
                                     <span>View / Print</span>
@@ -2346,7 +2346,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
                 <div>
                   <h3 className="font-bold text-base">Review & Approve Certificate</h3>
-                  <p className="text-xs text-slate-300">Issue official verified certificate with unique number</p>
+                  <p className="text-xs text-slate-300">Issue verified certificate with unique number</p>
                 </div>
               </div>
               <button
@@ -2388,7 +2388,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               {/* Unique Certificate Number (Editable/Confirm) */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Unique Certificate Number * (Official Serial ID)
+                  Unique Certificate Number * (Serial ID)
                 </label>
                 <input
                   type="text"
@@ -2406,7 +2406,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 {/* Issue Date */}
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Official Issue Date *
+                    Issue Date *
                   </label>
                   <input
                     type="text"
@@ -2436,10 +2436,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               </div>
 
-              {/* Authorized Signatory Title */}
+              {/* Signatory Designation Title */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
-                  Authorized Signatory Designation
+                  Signatory Designation
                 </label>
                 <input
                   type="text"
@@ -2548,7 +2548,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <Award className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base">Direct Issue Official Certificate</h3>
+                  <h3 className="font-bold text-base">Direct Issue Verified Certificate</h3>
                   <p className="text-xs text-slate-300">Generate and issue directly with status Approved</p>
                 </div>
               </div>
@@ -2603,7 +2603,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     type="tel"
                     value={directIssueForm.candidatePhone}
                     onChange={(e) => setDirectIssueForm({ ...directIssueForm, candidatePhone: e.target.value })}
-                    placeholder="+91 9752661102"
+                    placeholder="+91 9039881102"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
@@ -2697,7 +2697,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
 
-      {/* Official Certificate Modal for High-Resolution View & Print */}
+      {/* Verified Certificate Modal for High-Resolution View & Print */}
       <CertificateModal
         certificate={selectedCertForPrint}
         isOpen={!!selectedCertForPrint}

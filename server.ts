@@ -82,7 +82,7 @@ let certificatesStore: CandidateCertificate[] = [
     status: "Approved",
     approvedBy: "Placement Director & Controller, Shine Group Jobs",
     approvedDate: "2026-10-10",
-    signatoryTitle: "Authorized Signatory • Shine Group Jabalpur",
+    signatoryTitle: "Placement Director • Shine Group Jabalpur",
     adminRemarks: "Completed all practical assignments with distinction. Recommended for state e-mission roles."
   },
   {
@@ -120,7 +120,7 @@ let usersStore: ServerUser[] = [
     email: "admin@shinegroupjobs.com",
     passwordHash: "Sumit@7400",
     role: "admin",
-    phone: "+91 9752661102"
+    phone: "+91 9039881102"
   },
   {
     id: "user-candidate-1",
@@ -136,13 +136,13 @@ let usersStore: ServerUser[] = [
 let siteSettingsStore = {
   portalName: "SHINE GROUP JOBS",
   tagline: "Recruitment & Placement Consultancy • Jabalpur (Est. 2002)",
-  announcementNotice: "🔥 Direct Walk-in Interviews scheduled for Jabalpur, Indore & WFH outsourced positions. Call +91 9752661102 for appointment.",
+  announcementNotice: "🔥 Direct Walk-in Interviews scheduled for Jabalpur, Indore & WFH outsourced positions. Call +91 9039881102 for appointment.",
   announcementEnabled: true,
-  helplinePhone: "+91 9752661102",
+  helplinePhone: "+91 9039881102",
   secondaryPhone: "+91 9826112233",
-  supportEmail: "support@shinegroupjobs.com",
+  supportEmail: "admin@shinegroupjob.com",
   officeAddress: "2nd Floor, in front of Khalsa College, above Central Bank, Mahanadda, Jabalpur, Madhya Pradesh 482001",
-  whatsappNumber: "+91 9752661102",
+  whatsappNumber: "+91 9039881102",
   whatsappMessage: "Hello Shine Group Placement Desk, I am seeking job placement assistance.",
   aboutUsText: "Shine Group Jobs in Jabalpur is actively engaged in providing reliable placement services across multiple industries. With years of experience in the job market, we effectively match candidates with suitable job opportunities based on their skills and career goals. Our strong association with leading companies allows us to inform candidates promptly whenever new vacancies arise. We also assist candidates in getting their CVs noticed and shortlisted among a large pool of applicants, helping them stand out in today’s highly competitive job market.\n\nOur team of experienced and well-qualified professionals conducts detailed screenings to identify the true potential and strengths of each candidate. By carefully understanding the requirements of both job seekers and employers, we ensure the right match for long-term success. Through ethical practices, transparency, and consistent quality service, we have earned trust, credibility, and goodwill. Our aim is to set industry benchmarks while contributing towards a fully employed and empowered society."
 };
@@ -199,7 +199,7 @@ app.post("/api/auth/login", (req, res) => {
             name: "Shine Group Admin",
             email: "admin@shinegroupjobs.com",
             role: "admin",
-            phone: "+91 9752661102",
+            phone: "+91 9039881102",
             token: "admin-token-" + Date.now()
           },
           message: "Welcome back, Admin!"
@@ -275,7 +275,7 @@ app.post("/api/auth/register", (req, res) => {
       email: cleanEmail,
       passwordHash: password,
       role: finalRole,
-      phone: phone ? phone.trim() : "+91 9752661102"
+      phone: phone ? phone.trim() : "+91 9039881102"
     };
 
     usersStore.push(newUser);
@@ -308,7 +308,7 @@ app.get("/api/auth/me", (req, res) => {
         name: "Shine Group Admin",
         email: "admin@shinegroupjobs.com",
         role: "admin",
-        phone: "+91 9752661102"
+        phone: "+91 9039881102"
       }
     });
   }
@@ -453,7 +453,7 @@ app.post("/api/jobs", (req, res) => {
     if (!checkIsAdmin(req)) {
       return res.status(403).json({
         success: false,
-        message: "Unauthorized: Only verified Shine Group Admins can post job vacancies."
+        message: "Access Denied: Only verified Shine Group Admins can post job vacancies."
       });
     }
 
@@ -518,7 +518,7 @@ app.post("/api/jobs", (req, res) => {
         ? perks
         : ["Provident Fund & ESI", "Performance Incentives", "Professional Growth"],
       contactEmail: contactEmail || "recruitment@shinegroupjobs.com",
-      contactPhone: contactPhone || "+91 9752661102",
+      contactPhone: contactPhone || "+91 9039881102",
       postedBy: postedBy.trim(),
       postedDate: new Date().toISOString().split("T")[0],
       deadline: deadline || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
@@ -551,7 +551,7 @@ app.delete("/api/jobs/:id", (req, res) => {
   if (!checkIsAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: "Unauthorized: Only verified Shine Group Admins can delete job vacancies."
+      message: "Access Denied: Only verified Shine Group Admins can delete job vacancies."
     });
   }
 
@@ -571,7 +571,7 @@ app.patch("/api/jobs/:id/status", (req, res) => {
   if (!checkIsAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: "Unauthorized: Only verified Shine Group Admins can update job status."
+      message: "Access Denied: Only verified Shine Group Admins can update job status."
     });
   }
 
@@ -592,7 +592,7 @@ app.patch("/api/jobs/:id", (req, res) => {
   if (!checkIsAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: "Unauthorized: Only verified Shine Group Admins can edit job vacancies."
+      message: "Access Denied: Only verified Shine Group Admins can edit job vacancies."
     });
   }
 
@@ -758,7 +758,7 @@ app.patch("/api/applications/:id/status", (req, res) => {
   if (!checkIsAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: "Unauthorized: Only verified Admins can update application status."
+      message: "Access Denied: Only verified Admins can update application status."
     });
   }
 
@@ -783,7 +783,7 @@ app.delete("/api/applications/:id", (req, res) => {
   if (!checkIsAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: "Unauthorized: Only verified Admins can delete applications."
+      message: "Access Denied: Only verified Admins can delete applications."
     });
   }
 
@@ -888,7 +888,7 @@ app.post("/api/certificates/request", (req, res) => {
 
 app.patch("/api/certificates/:id/approve", (req, res) => {
   if (!checkIsAdmin(req)) {
-    return res.status(403).json({ success: false, message: "Unauthorized: Admin access required." });
+    return res.status(403).json({ success: false, message: "Access Denied: Admin access required." });
   }
 
   const { id } = req.params;
@@ -905,19 +905,19 @@ app.patch("/api/certificates/:id/approve", (req, res) => {
   cert.grade = grade || "Grade A+ (Distinction)";
   cert.approvedBy = approvedBy || "Director, Shine Group Jobs Placement Desk";
   cert.approvedDate = new Date().toISOString().split("T")[0];
-  cert.signatoryTitle = signatoryTitle || "Authorized Signatory • Jabalpur Office";
+  cert.signatoryTitle = signatoryTitle || "Placement Director • Jabalpur Office";
   if (adminRemarks) cert.adminRemarks = adminRemarks;
 
   res.json({
     success: true,
     certificate: cert,
-    message: `Certificate ${cert.certificateNumber} approved and officially issued for ${cert.candidateName}!`
+    message: `Certificate ${cert.certificateNumber} approved and issued for ${cert.candidateName}!`
   });
 });
 
 app.patch("/api/certificates/:id/reject", (req, res) => {
   if (!checkIsAdmin(req)) {
-    return res.status(403).json({ success: false, message: "Unauthorized: Admin access required." });
+    return res.status(403).json({ success: false, message: "Access Denied: Admin access required." });
   }
 
   const { id } = req.params;
@@ -941,7 +941,7 @@ app.patch("/api/certificates/:id/reject", (req, res) => {
 // 8c3. Delete Certificate (Admin Only)
 app.delete("/api/certificates/:id", (req, res) => {
   if (!checkIsAdmin(req)) {
-    return res.status(403).json({ success: false, message: "Unauthorized: Admin access required." });
+    return res.status(403).json({ success: false, message: "Access Denied: Admin access required." });
   }
 
   const { id } = req.params;
@@ -963,7 +963,7 @@ app.delete("/api/certificates/:id", (req, res) => {
 
 app.post("/api/certificates/direct-issue", (req, res) => {
   if (!checkIsAdmin(req)) {
-    return res.status(403).json({ success: false, message: "Unauthorized: Admin access required." });
+    return res.status(403).json({ success: false, message: "Access Denied: Admin access required." });
   }
 
   const {
@@ -1000,7 +1000,7 @@ app.post("/api/certificates/direct-issue", (req, res) => {
     status: "Approved",
     approvedBy: "Controller of Examinations & Placement Head, Shine Group Jobs",
     approvedDate: new Date().toISOString().split("T")[0],
-    signatoryTitle: "Authorized Signatory • Jabalpur HQ",
+    signatoryTitle: "Placement Director • Jabalpur HQ",
     adminRemarks: adminRemarks || "Directly verified and issued by Shine Group Administration."
   };
 
@@ -1018,7 +1018,7 @@ app.get("/api/admin/metrics", (req, res) => {
   if (!checkIsAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: "Unauthorized: Admin access required."
+      message: "Access Denied: Admin access required."
     });
   }
 
@@ -1055,7 +1055,7 @@ app.patch("/api/site-settings", (req, res) => {
   if (!checkIsAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: "Unauthorized: Only verified Shine Group Admins can update website settings."
+      message: "Access Denied: Only verified Shine Group Admins can update website settings."
     });
   }
 
@@ -1077,7 +1077,7 @@ app.get("/api/admin/users", (req, res) => {
   if (!checkIsAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: "Unauthorized: Admin access required to view user directory."
+      message: "Access Denied: Admin access required to view user directory."
     });
   }
 
@@ -1086,7 +1086,7 @@ app.get("/api/admin/users", (req, res) => {
     name: u.name,
     email: u.email,
     role: u.role,
-    phone: u.phone || "+91 9752661102"
+    phone: u.phone || "+91 9039881102"
   }));
 
   res.json({
@@ -1100,7 +1100,7 @@ app.delete("/api/admin/users/:id", (req, res) => {
   if (!checkIsAdmin(req)) {
     return res.status(403).json({
       success: false,
-      message: "Unauthorized: Admin access required."
+      message: "Access Denied: Admin access required."
     });
   }
 

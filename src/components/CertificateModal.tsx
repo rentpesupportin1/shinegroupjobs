@@ -96,7 +96,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
           <div className="flex items-center gap-2">
             <Award className="w-5 h-5 text-amber-400 shrink-0" />
             <div>
-              <span className="font-bold text-xs sm:text-sm tracking-wide">Official Certificate Document</span>
+              <span className="font-bold text-xs sm:text-sm tracking-wide">Verified Certificate Document</span>
               <span className="ml-2 text-[11px] sm:text-xs font-mono text-amber-300 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded">
                 {certificate.certificateNumber}
               </span>
@@ -174,7 +174,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
               <span className="text-[11px] sm:text-xs">
                 {certificate.status === 'Pending Approval' 
-                  ? 'This certificate is currently PENDING ADMIN APPROVAL. The preview watermark will remain until Shine Group Admin officially approves and issues it.'
+                  ? 'This certificate is currently PENDING ADMIN APPROVAL. The preview watermark will remain until Shine Group Admin approves and issues it.'
                   : `Certificate Request Rejected: ${certificate.rejectionReason || 'Details could not be verified'}`}
               </span>
             </div>
@@ -277,7 +277,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 {/* Organization Title */}
                 <div className="pt-2">
                   <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-wider text-[#0b1329] font-serif uppercase leading-tight">
-                    SHINE GROUP JOBS & CONSULTANCY
+                    SHINE GROUP JOBS & PLACEMENT
                   </h1>
                   <p className="text-[10px] sm:text-xs text-amber-900 font-bold tracking-wider sm:tracking-widest uppercase mt-0.5">
                     Recruitment, Skill Development & Placement Agency • Jabalpur (Est. 2002)
@@ -304,7 +304,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               {/* 3. Body Text & Candidate Details */}
               <div className="text-center space-y-2.5 sm:space-y-3.5 px-2 sm:px-6 md:px-10">
                 <p className="text-xs sm:text-sm text-slate-600 italic font-serif">
-                  This is to officially certify that
+                  This is to certify that
                 </p>
 
                 {/* Candidate Name in Grand Executive Serif */}
@@ -338,7 +338,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                 )}
               </div>
 
-              {/* 4. Footer Signatures, QR Code & Official Gold Stamp */}
+              {/* 4. Footer Signatures, QR Code & Gold Stamp */}
               <div className="border-t border-amber-600/30 pt-3 sm:pt-4 px-1 sm:px-4">
                 <div className="grid grid-cols-3 items-end gap-2 text-center">
                   
@@ -356,7 +356,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Center: Official Golden Medallion Seal */}
+                  {/* Center: Golden Medallion Seal */}
                   <div className="flex flex-col items-center justify-center">
                     <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-amber-600/90 bg-gradient-to-tr from-amber-500 via-amber-200 to-amber-600 shadow-lg flex flex-col items-center justify-center text-center p-1 text-slate-950 select-none relative">
                       <div className="absolute inset-0.5 rounded-full border border-amber-700/50 pointer-events-none"></div>
@@ -377,7 +377,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Right: Authorized Signature */}
+                  {/* Right: Signature */}
                   <div className="text-right space-y-0.5">
                     <div className="h-8 sm:h-9 flex items-end justify-end">
                       <div className="font-serif italic font-bold text-blue-900 text-xs sm:text-sm md:text-base border-b-2 border-slate-900/60 pb-0.5 px-3 inline-block">
@@ -385,7 +385,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
                       </div>
                     </div>
                     <div className="text-[9.5px] sm:text-[11.5px] font-bold text-slate-900 leading-tight">
-                      Authorized Signatory
+                      Placement Director
                     </div>
                     <div className="text-[8px] sm:text-[9.5px] text-slate-500 leading-tight">
                       {certificate.signatoryTitle || 'Shine Group Jobs Jabalpur'}
@@ -396,7 +396,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
 
                 {/* Bottom Micro-Disclaimer */}
                 <div className="mt-2.5 pt-1.5 border-t border-slate-200 text-center text-[7.5px] sm:text-[8.5px] text-slate-500 font-serif leading-tight">
-                  This document is an authentic certified digital issuance by Shine Group Jobs & Consultancy, Jabalpur. Its authenticity can be verified online by querying Unique Certificate No. <strong className="text-slate-700 font-mono">{certificate.certificateNumber}</strong>.
+                  This document is an authentic certified digital issuance by Shine Group Jobs & Placement, Jabalpur. Its authenticity can be verified online by querying Unique Certificate No. <strong className="text-slate-700 font-mono">{certificate.certificateNumber}</strong>.
                 </div>
               </div>
 

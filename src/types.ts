@@ -146,7 +146,7 @@ export interface CandidateCertificate {
   duration: string; // e.g. "3 Months (June 2026 - August 2026)"
   issueDate?: string; // e.g. "14 October 2026"
   grade?: string; // e.g. "Grade A+ (Distinction)"
-  organization?: string; // e.g. "Shine Group Jobs & Placement Consultancy, Jabalpur"
+  organization?: string; // e.g. "Shine Group Jobs & Placement, Jabalpur"
   requestedDate: string;
   status: CertificateStatus;
   rejectionReason?: string;

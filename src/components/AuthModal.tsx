@@ -170,7 +170,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </h2>
           <p className="text-xs text-white/80 mt-1">
             {activeTab === 'admin'
-              ? 'Authorized portal for posting vacancies & candidate placement control.'
+              ? 'Admin portal for posting vacancies & candidate placement control.'
               : 'Track your submitted applications and interview call updates.'}
           </p>
 
@@ -284,7 +284,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                   <input
                     type="tel"
-                    placeholder="+91 9752661102"
+                    placeholder="+91 9039881102"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-slate-300 text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none"
@@ -301,7 +301,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <input
                   type="password"
                   required
-                  placeholder="Enter authorized admin passcode"
+                  placeholder="Enter admin passcode"
                   value={adminPasscode}
                   onChange={(e) => setAdminPasscode(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-amber-300 bg-amber-50/40 text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"

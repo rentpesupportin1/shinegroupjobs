@@ -52,7 +52,7 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
     skillsInput: '',
     perksInput: 'Provident Fund (PF) & ESI, Timely Monthly Salary, Career Growth',
     contactEmail: 'recruitment@shinegroupjobs.com',
-    contactPhone: '+91 9752661102',
+    contactPhone: '+91 9039881102',
     postedBy: 'Direct Employer',
     deadline: '',
     imageUrl: '',
@@ -187,7 +187,7 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
     setErrorMsg('');
 
     if (currentUser?.role !== 'admin') {
-      setErrorMsg('Access Restricted: Only verified Shine Group Administrators are authorized to post job vacancies.');
+      setErrorMsg('Access Restricted: Only verified Shine Group Administrators can post job vacancies.');
       return;
     }
 
@@ -305,7 +305,7 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-300">
-                Authorized publishing on Shine Group Jobs portal with Gemini AI job spec generation
+                Verified publishing on Shine Group Jobs portal with Gemini AI job spec generation
               </p>
             </div>
           </div>
@@ -352,7 +352,7 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
                     </span>
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Upload official recruitment flyer, company banner, or walk-in notice. Image will appear at the top of the job post.
+                    Upload recruitment flyer, company banner, or walk-in notice. Image will appear at the top of the job post.
                   </p>
                 </div>
               </div>
@@ -745,7 +745,7 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
                 </label>
                 <input
                   type="tel"
-                  placeholder="+91 9752661102"
+                  placeholder="+91 9039881102"
                   value={formData.contactPhone}
                   onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-600 focus:outline-none"

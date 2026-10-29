@@ -18,8 +18,8 @@ interface AboutContactSectionProps {
 
 export const AboutContactSection: React.FC<AboutContactSectionProps> = ({ websiteSettings }) => {
   const officeAddress = websiteSettings?.officeAddress || "2nd Floor, in front of Khalsa College, above Central Bank, Mahanadda, Jabalpur, Madhya Pradesh 482001";
-  const helplinePhone = websiteSettings?.helplinePhone || "+91 9752661102";
-  const supportEmail = websiteSettings?.supportEmail || "support@shinegroupjobs.com";
+  const helplinePhone = websiteSettings?.helplinePhone || "+91 9039881102";
+  const supportEmail = websiteSettings?.supportEmail || "admin@shinegroupjob.com";
 
   const aboutParagraphs = websiteSettings?.aboutUsText
     ? websiteSettings.aboutUsText.split('\n\n').filter(Boolean)
@@ -58,7 +58,7 @@ export const AboutContactSection: React.FC<AboutContactSectionProps> = ({ websit
                 About Shine Group Jobs & Placement Services
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Authorized Placement Consultancy • ISO 9001:2015 Certified • Headquartered in Jabalpur
+                Placement Consultancy • ISO 9001:2015 Certified • Headquartered in Jabalpur
               </p>
             </div>
           </div>
@@ -92,10 +92,10 @@ export const AboutContactSection: React.FC<AboutContactSectionProps> = ({ websit
             <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
               <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
                 <Building className="w-4 h-4" />
-                <span>Authorized Govt Vendor</span>
+                <span>Govt Staffing Vendor</span>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Official staffing contractor for public sector missions, municipal corporations, and digital e-districts.
+                Staffing contractor for public sector missions, municipal corporations, and digital e-districts.
               </p>
             </div>
           </div>
@@ -127,7 +127,7 @@ export const AboutContactSection: React.FC<AboutContactSectionProps> = ({ websit
                 <Phone className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-semibold text-white block">Helpline Telephones:</span>
-                  <a href="tel:+919752661102" className="text-slate-300 hover:text-white block">+91 9752661102</a>
+                  <a href="tel:+919039881102" className="text-slate-300 hover:text-white block">+91 9039881102</a>
                   <a href="tel:+919981661102" className="text-slate-300 hover:text-white block">+91 9981661102</a>
                 </div>
               </div>
@@ -135,21 +135,21 @@ export const AboutContactSection: React.FC<AboutContactSectionProps> = ({ websit
               <div className="flex items-start gap-2.5">
                 <Mail className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-semibold text-white block">Official Email Desk:</span>
-                  <span className="text-slate-300 block">support@shinegroupjobs.com</span>
+                  <span className="font-semibold text-white block">Email Support Desk:</span>
+                  <span className="text-slate-300 block">admin@shinegroupjob.com</span>
                 </div>
               </div>
             </div>
 
             <div className="pt-2">
               <a
-                href="https://wa.me/919752661102?text=Hello%20Shine%20Group%20Jobs,%20I%20would%20like%20to%20inquire%20about%20job%20vacancies"
+                href="https://wa.me/919039881102?text=Hello%20Shine%20Group%20Jobs,%20I%20would%20like%20to%20inquire%20about%20job%20vacancies"
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors"
               >
                 <MessageSquare className="w-4 h-4" />
-                <span>Chat Directly on WhatsApp (+91 9752661102)</span>
+                <span>Chat Directly on WhatsApp (+91 9039881102)</span>
               </a>
             </div>
           </div>
@@ -207,14 +207,14 @@ export const AboutContactSection: React.FC<AboutContactSectionProps> = ({ websit
               </p>
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2.5">
                 <a
-                  href="tel:+919752661102"
+                  href="tel:+919039881102"
                   className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors inline-flex items-center gap-1.5"
                 >
                   <Phone className="w-3.5 h-3.5" />
-                  <span>Call +91 9752661102</span>
+                  <span>Call +91 9039881102</span>
                 </a>
                 <a
-                  href="https://wa.me/919752661102?text=Hello%20Shine%20Group%20Jobs,%20I%20am%20looking%20for%20a%20job%20placement"
+                  href="https://wa.me/919039881102?text=Hello%20Shine%20Group%20Jobs,%20I%20am%20looking%20for%20a%20job%20placement"
                   target="_blank"
                   rel="noreferrer"
                   className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors inline-flex items-center gap-1.5"

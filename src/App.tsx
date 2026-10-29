@@ -26,13 +26,13 @@ import { MessageCircle, Bell } from 'lucide-react';
 const defaultSettings: WebsiteSettings = {
   portalName: "SHINE GROUP JOBS",
   tagline: "Recruitment & Placement Consultancy • Jabalpur (Est. 2002)",
-  announcementNotice: "🔥 Direct Walk-in Interviews scheduled for Jabalpur, Indore & WFH outsourced positions. Call +91 9752661102 for appointment.",
+  announcementNotice: "🔥 Direct Walk-in Interviews scheduled for Jabalpur, Indore & WFH outsourced positions. Call +91 9039881102 for appointment.",
   announcementEnabled: true,
-  helplinePhone: "+91 9752661102",
+  helplinePhone: "+91 9039881102",
   secondaryPhone: "+91 9826112233",
-  supportEmail: "support@shinegroupjobs.com",
+  supportEmail: "admin@shinegroupjob.com",
   officeAddress: "2nd Floor, in front of Khalsa College, above Central Bank, Mahanadda, Jabalpur, Madhya Pradesh 482001",
-  whatsappNumber: "+91 9752661102",
+  whatsappNumber: "+91 9039881102",
   whatsappMessage: "Hello Shine Group Placement Desk, I am seeking job placement assistance.",
   aboutUsText: "Shine Group Jobs in Jabalpur is actively engaged in providing reliable placement services across multiple industries. With years of experience in the job market, we effectively match candidates with suitable job opportunities based on their skills and career goals. Our strong association with leading companies allows us to inform candidates promptly whenever new vacancies arise. We also assist candidates in getting their CVs noticed and shortlisted among a large pool of applicants, helping them stand out in today’s highly competitive job market.\n\nOur team of experienced and well-qualified professionals conducts detailed screenings to identify the true potential and strengths of each candidate. By carefully understanding the requirements of both job seekers and employers, we ensure the right match for long-term success. Through ethical practices, transparency, and consistent quality service, we have earned trust, credibility, and goodwill. Our aim is to set industry benchmarks while contributing towards a fully employed and empowered society."
 };
@@ -344,7 +344,7 @@ export default function App() {
   // Handle delete job (Admin Only)
   const handleDeleteJob = async (jobId: string) => {
     if (currentUser?.role !== 'admin') {
-      console.warn('Unauthorized attempt to delete job: only verified admin is permitted.');
+      console.warn('Permission denied: only verified admin is permitted to delete jobs.');
       handleOpenAuthModal('admin');
       return;
     }
@@ -597,7 +597,7 @@ export default function App() {
           Chat on WhatsApp: {websiteSettings.helplinePhone}
         </span>
         <a
-          href={`https://wa.me/${(websiteSettings.whatsappNumber || '919752661102').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(websiteSettings.whatsappMessage || 'Hello Shine Group Jobs')}`}
+          href={`https://wa.me/${(websiteSettings.whatsappNumber || '919039881102').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(websiteSettings.whatsappMessage || 'Hello Shine Group Jobs')}`}
           target="_blank"
           rel="noreferrer"
           aria-label="Direct WhatsApp Placement Desk Chat"

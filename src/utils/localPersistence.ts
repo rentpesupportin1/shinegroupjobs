@@ -48,13 +48,13 @@ export const INITIAL_APPLICATIONS: JobApplication[] = [
 export const DEFAULT_SITE_SETTINGS: WebsiteSettings = {
   portalName: "SHINE GROUP JOBS",
   tagline: "Recruitment & Placement Consultancy • Jabalpur (Est. 2002)",
-  announcementNotice: "🔥 Direct Walk-in Interviews scheduled for Jabalpur, Indore & WFH outsourced positions. Call +91 9752661102 for appointment.",
+  announcementNotice: "🔥 Direct Walk-in Interviews scheduled for Jabalpur, Indore & WFH outsourced positions. Call +91 9039881102 for appointment.",
   announcementEnabled: true,
-  helplinePhone: "+91 9752661102",
+  helplinePhone: "+91 9039881102",
   secondaryPhone: "+91 9826112233",
-  supportEmail: "support@shinegroupjobs.com",
+  supportEmail: "admin@shinegroupjob.com",
   officeAddress: "2nd Floor, in front of Khalsa College, above Central Bank, Mahanadda, Jabalpur, Madhya Pradesh 482001",
-  whatsappNumber: "+91 9752661102",
+  whatsappNumber: "+91 9039881102",
   whatsappMessage: "Hello Shine Group Placement Desk, I am seeking job placement assistance.",
   aboutUsText: "Shine Group Jobs in Jabalpur is actively engaged in providing reliable placement services across multiple industries. With years of experience in the job market, we effectively match candidates with suitable job opportunities based on their skills and career goals. Our strong association with leading companies allows us to inform candidates promptly whenever new vacancies arise. We also assist candidates in getting their CVs noticed and shortlisted among a large pool of applicants, helping them stand out in today’s highly competitive job market.\n\nOur team of experienced and well-qualified professionals conducts detailed screenings to identify the true potential and strengths of each candidate. By carefully understanding the requirements of both job seekers and employers, we ensure the right match for long-term success. Through ethical practices, transparency, and consistent quality service, we have earned trust, credibility, and goodwill. Our aim is to set industry benchmarks while contributing towards a fully employed and empowered society."
 };
@@ -86,7 +86,7 @@ export function getStoredUsers(): StoredUserRecord[] {
       email: "admin@shinegroupjobs.com",
       password: "Sumit@7400",
       role: "admin",
-      phone: "+91 9752661102"
+      phone: "+91 9039881102"
     },
     {
       id: "user-candidate-1",
@@ -110,7 +110,7 @@ export function offlineAuthLogin(email: string, password: string, role?: string)
         name: "Shine Group Admin",
         email: "admin@shinegroupjobs.com",
         role: "admin",
-        phone: "+91 9752661102",
+        phone: "+91 9039881102",
         token: "admin-token-offline-" + Date.now()
       };
       return {
@@ -184,7 +184,7 @@ export function offlineAuthRegister(
     } else {
       return {
         success: false,
-        message: "Invalid Admin Passcode. Admin registration restricted to authorized personnel."
+        message: "Invalid Admin Passcode. Admin registration restricted to administrators."
       };
     }
   }
@@ -284,8 +284,8 @@ export function saveLocalCustomJob(jobData: Partial<Job>): Job {
     requirements: jobData.requirements || [],
     skills: jobData.skills || ["Communication"],
     perks: jobData.perks || ["PF & ESI"],
-    contactEmail: jobData.contactEmail || "support@shinegroupjobs.com",
-    contactPhone: jobData.contactPhone || "+91 9752661102",
+    contactEmail: jobData.contactEmail || "admin@shinegroupjob.com",
+    contactPhone: jobData.contactPhone || "+91 9039881102",
     postedBy: jobData.postedBy || "Shine Admin Desk",
     postedDate: new Date().toISOString().split('T')[0],
     deadline: jobData.deadline || "",
@@ -468,7 +468,7 @@ export const INITIAL_CERTIFICATES: CandidateCertificate[] = [
     status: "Approved",
     approvedBy: "Placement Director & Controller, Shine Group Jobs",
     approvedDate: "2026-10-10",
-    signatoryTitle: "Authorized Signatory • Shine Group Jabalpur",
+    signatoryTitle: "Placement Director • Shine Group Jabalpur",
     adminRemarks: "Completed all practical assignments with distinction. Recommended for state e-mission roles."
   },
   {
@@ -586,7 +586,7 @@ export function approveCertificate(
       adminRemarks: approvalData.adminRemarks || cert.adminRemarks,
       approvedBy: approvalData.approvedBy || "Director, Shine Group Jobs Placement Desk",
       approvedDate: new Date().toISOString().split('T')[0],
-      signatoryTitle: approvalData.signatoryTitle || "Authorized Signatory • Jabalpur Office",
+      signatoryTitle: approvalData.signatoryTitle || "Placement Director • Jabalpur Office",
       status: "Approved"
     };
 
@@ -658,7 +658,7 @@ export function adminDirectIssueCertificate(data: {
     status: "Approved",
     approvedBy: "Controller of Examinations & Placement Head, Shine Group Jobs",
     approvedDate: new Date().toISOString().split('T')[0],
-    signatoryTitle: "Authorized Signatory • Jabalpur HQ",
+    signatoryTitle: "Placement Director • Jabalpur HQ",
     adminRemarks: data.adminRemarks || "Directly verified and issued by Shine Group Administration."
   };
 

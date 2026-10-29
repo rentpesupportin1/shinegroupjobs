@@ -9,7 +9,7 @@ export interface ShineLogoProps {
 }
 
 /**
- * Official Shine Group Jobs Logo Component
+ * Shine Group Jobs Logo Component
  * Incorporates the ISO 9001:2015 Certified emblem, 
  * the green-blue circuit 'S' emblem, and Shine Group Jobs brand identity.
  */
@@ -20,7 +20,7 @@ export const ShineLogo: React.FC<ShineLogoProps> = ({
   showIso = true,
   alt = 'Shine Group Jobs - ISO 9001:2015 Certified'
 }) => {
-  // If variant is 'badge' or 'image', display the official high-resolution badge
+  // If variant is 'badge' or 'image', display the high-resolution badge
   if (variant === 'badge' || variant === 'image') {
     const sizeClasses = {
       xs: 'h-8 max-w-[120px]',

@@ -25,9 +25,9 @@ export const Footer: React.FC<FooterProps> = ({
   onNavigateTab,
   websiteSettings
 }) => {
-  const helpline = websiteSettings?.helplinePhone || "+91 9752661102";
+  const helpline = websiteSettings?.helplinePhone || "+91 9039881102";
   const address = websiteSettings?.officeAddress || "2nd Floor, in front of Khalsa College, above Central Bank, Mahanadda, Jabalpur, Madhya Pradesh 482001";
-  const email = websiteSettings?.supportEmail || "support@shinegroupjobs.com";
+  const email = websiteSettings?.supportEmail || "admin@shinegroupjob.com";
   return (
     <footer className="bg-slate-950 text-slate-400 text-xs border-t border-slate-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -47,7 +47,7 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
 
             <p className="text-slate-400 leading-relaxed text-xs max-w-sm">
-              Madhya Pradesh's trusted recruitment consultancy and authorized placement partner. Connecting verified candidates with government outsourced contracts, genuine work-from-home employers, and premier corporate enterprises.
+              Madhya Pradesh's trusted recruitment consultancy and placement partner. Connecting verified candidates with government outsourced contracts, genuine work-from-home employers, and premier corporate enterprises.
             </p>
 
             <div className="flex items-center gap-2 text-[11px] text-emerald-400 font-medium">

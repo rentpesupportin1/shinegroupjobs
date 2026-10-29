@@ -153,7 +153,7 @@ export function generateCertificateDataUrl(certificate: CandidateCertificate): s
   ctx.textAlign = 'center';
   ctx.font = '900 38px Georgia, serif';
   ctx.fillStyle = '#090e1a';
-  ctx.fillText('SHINE GROUP JOBS & CONSULTANCY', width / 2, 166);
+  ctx.fillText('SHINE GROUP JOBS & PLACEMENT', width / 2, 166);
 
   ctx.font = '600 13px "Plus Jakarta Sans", sans-serif';
   ctx.fillStyle = '#78350f';
@@ -198,7 +198,7 @@ export function generateCertificateDataUrl(certificate: CandidateCertificate): s
   // 8. Body Text: Recipient & Qualification Details
   ctx.font = 'italic 18px Georgia, serif';
   ctx.fillStyle = '#475569';
-  ctx.fillText('This is to officially certify that', width / 2, 298);
+  ctx.fillText('This is to certify that', width / 2, 298);
 
   // Candidate Name (Grand Executive Serif)
   ctx.font = 'bold 40px Georgia, serif';
@@ -317,7 +317,7 @@ export function generateCertificateDataUrl(certificate: CandidateCertificate): s
   ctx.fillStyle = '#94a3b8';
   ctx.fillText(`Verification ID: ${certificate.id}`, 75, footerY + 82);
 
-  // 12. Footer Center: Official Gold Seal Medallion
+  // 12. Footer Center: Gold Seal Medallion
   const sealX = width / 2;
   const sealY = footerY + 54;
   const sealRadius = 48;
@@ -364,13 +364,13 @@ export function generateCertificateDataUrl(certificate: CandidateCertificate): s
   ctx.font = '900 12px "Plus Jakarta Sans", sans-serif';
   ctx.fillText('VERIFIED', sealX, sealY + 12);
   ctx.font = 'bold 7px "Plus Jakarta Sans", sans-serif';
-  ctx.fillText('OFFICIAL SEAL', sealX, sealY + 25);
+  ctx.fillText('VERIFIED SEAL', sealX, sealY + 25);
 
   ctx.font = '11px monospace';
   ctx.fillStyle = '#64748b';
   ctx.fillText('verify.shinegroupjobs.com', sealX, footerY + 120);
 
-  // 13. Footer Right: Authorized Signatory
+  // 13. Footer Right: Signature Designation
   ctx.textAlign = 'right';
   ctx.font = 'italic bold 23px Georgia, serif';
   ctx.fillStyle = '#1e3a8a';
@@ -387,7 +387,7 @@ export function generateCertificateDataUrl(certificate: CandidateCertificate): s
 
   ctx.font = 'bold 13px "Plus Jakarta Sans", sans-serif';
   ctx.fillStyle = '#0f172a';
-  ctx.fillText('Authorized Signatory', width - 75, footerY + 64);
+  ctx.fillText('Placement Director', width - 75, footerY + 64);
 
   ctx.font = '12px "Plus Jakarta Sans", sans-serif';
   ctx.fillStyle = '#64748b';
@@ -398,7 +398,7 @@ export function generateCertificateDataUrl(certificate: CandidateCertificate): s
   ctx.font = '10px "Plus Jakarta Sans", sans-serif';
   ctx.fillStyle = '#94a3b8';
   ctx.fillText(
-    `This document is an authentic certified digital issuance by Shine Group Jobs & Consultancy, Jabalpur. Online verification: Unique Cert No. ${certificate.certificateNumber}`,
+    `This document is an authentic certified digital issuance by Shine Group Jobs & Placement, Jabalpur. Online verification: Unique Cert No. ${certificate.certificateNumber}`,
     width / 2,
     height - 52
   );
