@@ -140,7 +140,7 @@ export const JobsExplorer: React.FC<JobsExplorerProps> = ({
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Real jobs verified by Shine Group placement desks. Direct interviews with zero candidate fees.
+            Real jobs verified by Shine Group placement desks. Direct interviews with verified employers.
           </p>
         </div>
 
@@ -220,7 +220,7 @@ export const JobsExplorer: React.FC<JobsExplorerProps> = ({
                     <Laptop className="w-3.5 h-3.5 text-emerald-600" />
                     Verified Work From Home
                   </span>
-                  <span className="text-[11px] text-emerald-700">₹0 fee, guaranteed genuine</span>
+                  <span className="text-[11px] text-emerald-700">Guaranteed genuine</span>
                 </div>
               </label>
 

@@ -208,7 +208,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             <p className="text-xs sm:text-sm text-slate-300 font-medium mt-0.5">
               Verified WFH Roles
             </p>
-            <span className="text-[10px] text-slate-400">Zero Investment</span>
+            <span className="text-[10px] text-slate-400">Remote & Hybrid</span>
           </div>
 
           <div className="bg-slate-800/60 backdrop-blur-md border border-slate-700/70 rounded-2xl p-4 text-center hover:border-slate-600 transition-colors">

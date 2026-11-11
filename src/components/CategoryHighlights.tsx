@@ -28,7 +28,7 @@ export const CategoryHighlights: React.FC<CategoryHighlightsProps> = ({
       hindiTitle: "घर बैठे कार्य",
       categoryName: "Work From Home",
       count: "78+ Vacancies",
-      badge: "₹0 Fee Verified",
+      badge: "Verified WFH",
       badgeColor: "bg-emerald-100 text-emerald-800 border-emerald-200",
       description: "Data entry, indexing, backend operations, customer support, and content verification. Authentic employers only with guaranteed timely monthly payouts.",
       icon: Laptop,

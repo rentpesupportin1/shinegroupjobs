@@ -82,10 +82,10 @@ export const AboutContactSection: React.FC<AboutContactSectionProps> = ({ websit
             <div className="p-4 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
               <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
                 <CheckCircle2 className="w-4 h-4" />
-                <span>Zero Candidate Fee Policy</span>
+                <span>Direct Placement Policy</span>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                We never demand upfront registration fees, security deposits, or advance payments from job seekers.
+                We connect job seekers directly with legitimate corporate and outsourced career vacancies.
               </p>
             </div>
 
@@ -173,9 +173,9 @@ export const AboutContactSection: React.FC<AboutContactSectionProps> = ({ websit
               <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-xs font-bold text-slate-900">Zero Upfront Fee Policy</h4>
+                  <h4 className="text-xs font-bold text-slate-900">Direct Placement Support</h4>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Shine Group Jobs never charges any registration fees, security deposits, or advance document fees.
+                    Shine Group Jobs facilitates direct employer interviews and genuine corporate placements.
                   </p>
                 </div>
               </div>

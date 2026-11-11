@@ -590,7 +590,7 @@ export const ApplyModal: React.FC<ApplyModalProps> = ({
 
             <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 flex items-center gap-2 text-xs text-blue-900">
               <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-              <span>100% Genuine Candidate Policy: Shine Group Jobs never charges any upfront registration fee or security deposit from applicants.</span>
+              <span>100% Genuine Candidate Policy: Shine Group Jobs connects applicants directly with verified employers and legitimate opportunities.</span>
             </div>
 
             <div className="pt-3 border-t border-slate-200 flex items-center justify-between">

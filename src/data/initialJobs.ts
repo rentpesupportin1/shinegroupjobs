@@ -54,7 +54,7 @@ export const INITIAL_JOBS: Job[] = [
     salaryPeriod: "per month",
     experienceMin: 0,
     experienceMax: 2,
-    description: "100% verified work-from-home opportunity with no deposit or registration fee. Review digital documents, transcribe unstructured invoice datasets, and validate catalogue tags for ecommerce clients.",
+    description: "100% verified work-from-home opportunity. Review digital documents, transcribe unstructured invoice datasets, and validate catalogue tags for ecommerce clients.",
     responsibilities: [
       "Audit and tag e-commerce catalogue entries according to guidelines",
       "Perform high-accuracy optical character review and text entry",
