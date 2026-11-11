@@ -60,6 +60,7 @@ import {
   deleteLocalUser,
   deleteLocalApplication
 } from '../utils/localPersistence.js';
+import { db, collection, getDocs } from '../firebase.js';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -203,7 +204,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (e) {
       console.warn('Failed to load users from API, loading local users:', e);
     }
-    // Netlify static fallback
+    // Netlify static & Cloud Firestore lookup
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      if (!snap.empty) {
+        const firestoreUsers: any[] = [];
+        snap.forEach(d => {
+          const data = d.data();
+          firestoreUsers.push({
+            id: data.id || d.id,
+            name: data.name || 'Job Seeker',
+            email: data.email,
+            role: data.role || 'job_seeker',
+            phone: data.phone || '+91 9039881102'
+          });
+        });
+
+        const localUsers = getStoredUsers().map(u => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          phone: u.phone
+        }));
+
+        const combined = [...firestoreUsers];
+        for (const lu of localUsers) {
+          if (!combined.some(c => (c.email || '').toLowerCase() === (lu.email || '').toLowerCase())) {
+            combined.push(lu);
+          }
+        }
+        setRegisteredUsers(combined);
+        setUsersLoading(false);
+        return;
+      }
+    } catch (fsErr) {
+      console.warn('Firestore users fetch notice:', fsErr);
+    }
+
+    // Fallback to local storage
     const localUsers = getStoredUsers().map(u => ({
       id: u.id,
       name: u.name,

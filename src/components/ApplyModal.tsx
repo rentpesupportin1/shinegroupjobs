@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { Job, JobApplication, User as UserType, UploadedResumeFile } from '../types.js';
 import { saveLocalApplication } from '../utils/localPersistence.js';
+import { db, doc, setDoc } from '../firebase.js';
 
 interface ApplyModalProps {
   job: Job | null;
@@ -197,6 +198,29 @@ export const ApplyModal: React.FC<ApplyModalProps> = ({
       // If backend was not running (Netlify static host), save application locally
       if (!submittedApp) {
         submittedApp = saveLocalApplication(job, payload);
+      }
+
+      // Synchronize with Cloud Firestore Database (cross-device Netlify persistence)
+      if (submittedApp) {
+        try {
+          await setDoc(doc(db, 'applications', submittedApp.id), {
+            id: submittedApp.id,
+            jobId: submittedApp.jobId,
+            jobTitle: submittedApp.jobTitle,
+            company: submittedApp.company,
+            fullName: submittedApp.fullName,
+            email: submittedApp.email,
+            phone: submittedApp.phone,
+            currentCity: submittedApp.currentCity || '',
+            totalExperience: submittedApp.totalExperience || '',
+            expectedCTC: submittedApp.expectedCTC || '',
+            status: submittedApp.status || 'Submitted',
+            appliedDate: submittedApp.appliedDate || new Date().toISOString(),
+            resumeUrlOrSummary: submittedApp.resumeUrlOrSummary || ''
+          });
+        } catch (fsErr) {
+          console.warn('Firestore application sync notice:', fsErr);
+        }
       }
 
       setSubmittedApp(submittedApp);

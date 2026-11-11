@@ -21,6 +21,7 @@ import {
   getStoredSettings, 
   deleteLocalJob 
 } from './utils/localPersistence.js';
+import { db, collection, getDocs } from './firebase.js';
 import { MessageCircle, Bell } from 'lucide-react';
 
 const defaultSettings: WebsiteSettings = {
@@ -153,7 +154,29 @@ export default function App() {
     } catch (err) {
       console.warn('Could not fetch applications, using local storage state:', err);
     }
-    // Static / Netlify fallback
+    // Static / Netlify Cloud Firestore fallback
+    try {
+      const snap = await getDocs(collection(db, 'applications'));
+      if (!snap.empty) {
+        const firestoreApps: JobApplication[] = [];
+        snap.forEach(d => {
+          firestoreApps.push(d.data() as JobApplication);
+        });
+
+        const localApps = getStoredApplications();
+        const merged = [...firestoreApps];
+        for (const la of localApps) {
+          if (!merged.some(m => m.id === la.id)) {
+            merged.push(la);
+          }
+        }
+        setApplications(merged);
+        return;
+      }
+    } catch (fsErr) {
+      console.warn('Firestore applications lookup notice:', fsErr);
+    }
+
     setApplications(getStoredApplications());
   };
 

@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile for job seekers and administrators",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "enum": ["job_seeker", "admin"] },
+        "phone": { "type": "string", "maxLength": 25 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Job": {
+      "title": "Job",
+      "description": "Job opening vacancy",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 150 },
+        "company": { "type": "string", "maxLength": 150 },
+        "category": { "type": "string", "maxLength": 100 },
+        "jobType": { "type": "string", "maxLength": 50 },
+        "workMode": { "type": "string", "maxLength": 50 },
+        "location": { "type": "string", "maxLength": 150 },
+        "salaryMin": { "type": "number" },
+        "salaryMax": { "type": "number" },
+        "salaryPeriod": { "type": "string", "maxLength": 50 },
+        "description": { "type": "string", "maxLength": 5000 },
+        "contactEmail": { "type": "string", "maxLength": 150 },
+        "contactPhone": { "type": "string", "maxLength": 25 },
+        "status": { "type": "string", "enum": ["Active", "Closed"] },
+        "postedDate": { "type": "string" }
+      },
+      "required": ["id", "title", "company", "description", "status"]
+    },
+    "Application": {
+      "title": "Application",
+      "description": "Candidate application submitted for a job opening",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "jobId": { "type": "string" },
+        "jobTitle": { "type": "string", "maxLength": 150 },
+        "applicantName": { "type": "string", "maxLength": 100 },
+        "applicantEmail": { "type": "string", "maxLength": 150 },
+        "applicantPhone": { "type": "string", "maxLength": 25 },
+        "status": { "type": "string", "enum": ["Submitted", "Under Review", "Shortlisted", "Interview Scheduled", "Selected", "Rejected"] },
+        "appliedDate": { "type": "string" }
+      },
+      "required": ["id", "jobId", "applicantName", "applicantEmail", "status"]
+    },
+    "Certificate": {
+      "title": "Certificate",
+      "description": "Issued skill / placement completion certificate",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "certificateNumber": { "type": "string", "maxLength": 100 },
+        "candidateName": { "type": "string", "maxLength": 100 },
+        "candidateEmail": { "type": "string", "maxLength": 150 },
+        "certificateType": { "type": "string", "maxLength": 100 },
+        "courseOrRole": { "type": "string", "maxLength": 200 },
+        "duration": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["Pending Approval", "Approved", "Rejected"] }
+      },
+      "required": ["id", "certificateNumber", "candidateName", "candidateEmail", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Registered users directory"
+    },
+    "/jobs/{jobId}": {
+      "schema": "Job",
+      "description": "Job vacancies listing"
+    },
+    "/applications/{applicationId}": {
+      "schema": "Application",
+      "description": "Candidate applications"
+    },
+    "/certificates/{certificateId}": {
+      "schema": "Certificate",
+      "description": "Certificates repository"
+    }
+  }
+}
