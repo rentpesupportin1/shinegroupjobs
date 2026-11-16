@@ -240,7 +240,7 @@ export const JobsExplorer: React.FC<JobsExplorerProps> = ({
                     <Building className="w-3.5 h-3.5 text-amber-600" />
                     Govt Outsourced Contracts
                   </span>
-                  <span className="text-[11px] text-amber-700">MP State & public missions</span>
+                  <span className="text-[11px] text-amber-700">PAN India & public missions</span>
                 </div>
               </label>
             </div>

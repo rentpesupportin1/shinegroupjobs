@@ -3,8 +3,8 @@ import { Job } from '../types.js';
 export const INITIAL_JOBS: Job[] = [
   {
     id: "job-101",
-    title: "MP State e-Governance Data Analyst & Portal Operator",
-    company: "MP State e-Mission (Outsourced Partner)",
+    title: "PAN India e-Governance Data Analyst & Portal Operator",
+    company: "PAN India e-Mission (Outsourced Partner)",
     category: "Govt Outsourced",
     jobType: "Government Outsourced",
     workMode: "On-site",
@@ -14,7 +14,7 @@ export const INITIAL_JOBS: Job[] = [
     salaryPeriod: "per month",
     experienceMin: 0,
     experienceMax: 3,
-    description: "Shine Group Jobs is the designated vendor partner providing technical staffing for MP State Citizen Services & Digital Portal operations. Candidates will manage citizen applications, verify Aadhaar & Samagra records, and process digital certificates.",
+    description: "Shine Group Jobs is the designated vendor partner providing technical staffing for PAN India Citizen Services & Digital Portal operations. Candidates will manage citizen applications, verify Aadhaar & citizen records, and process digital certificates.",
     responsibilities: [
       "Operate e-District and Samagra database portal accurately",
       "Verify citizen demographic information against state registry",
@@ -377,8 +377,8 @@ export const INITIAL_APPLICATIONS = [
   {
     id: "app-1001",
     jobId: "job-101",
-    jobTitle: "MP State e-Governance Data Analyst & Portal Operator",
-    company: "MP State e-Mission (Outsourced Partner)",
+    jobTitle: "PAN India e-Governance Data Analyst & Portal Operator",
+    company: "PAN India e-Mission (Outsourced Partner)",
     fullName: "Rahul Shrivastava",
     email: "rahul.shrivastava@example.com",
     phone: "+91 9826112233",
