@@ -75,7 +75,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       if (activeTab === 'admin' && !isAllowedAdmin) {
         await signOut(auth).catch(() => {});
-        setError(`Account "${cleanEmail}" is not authorized for Admin Desk. Please sign in with rentpe.support.in@gmail.com.`);
+        setError(`Account "${cleanEmail}" is not authorized for Admin Desk. Please sign in with shinegroup565@gmail.com.`);
         setGoogleLoading(false);
         return;
       }
@@ -445,7 +445,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
             {activeTab === 'admin' && (
               <p className="text-[11px] text-amber-800 bg-amber-50/70 border border-amber-200 rounded-xl px-3 py-2 text-center leading-relaxed">
-                For permanent Netlify Cloud saving, sign in with authorized Google Admin (<strong className="font-bold">rentpe.support.in@gmail.com</strong>).
+                For permanent Netlify Cloud saving, sign in with authorized Google Admin (<strong className="font-bold">shinegroup565@gmail.com</strong>).
               </p>
             )}
           </form>

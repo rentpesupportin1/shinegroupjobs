@@ -34,7 +34,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isVerifiedEmail() && request.auth.token.email in [
-        'rentpe.support.in@gmail.com',
+        'shinegroup565@gmail.com',
         'admin@shinegroupjobs.com',
         'admin@shinegroupjob.com'
       ];

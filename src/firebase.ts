@@ -36,7 +36,7 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export const ADMIN_EMAILS = [
-  'rentpe.support.in@gmail.com',
+  'shinegroup565@gmail.com',
   'admin@shinegroupjobs.com',
   'admin@shinegroupjob.com'
 ];

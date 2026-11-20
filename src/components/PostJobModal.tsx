@@ -113,7 +113,7 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
       const email = (result.user.email || '').toLowerCase().trim();
       if (!isAuthorizedAdminEmail(email) || !result.user.emailVerified) {
         await signOut(auth).catch(() => {});
-        setErrorMsg(`Account "${email}" is not an authorized Admin. Please sign in with rentpe.support.in@gmail.com.`);
+        setErrorMsg(`Account "${email}" is not an authorized Admin. Please sign in with shinegroup565@gmail.com.`);
         return;
       }
       setIsCloudAdminReady(true);
@@ -340,7 +340,7 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
       if (!isFirebaseAdminSession()) {
         if (!apiSaved) {
           setErrorMsg(
-            'Cloud Database connection required: Please click "Connect Google Admin (rentpe.support.in@gmail.com)" below so your job post saves permanently on Netlify and does not disappear.'
+            'Cloud Database connection required: Please click "Connect Google Admin (shinegroup565@gmail.com)" below so your job post saves permanently on Netlify and does not disappear.'
           );
           setSubmitting(false);
           return;
@@ -354,7 +354,7 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
             handleFirestoreError(fsErr, OperationType.CREATE, `jobs/${postedJob.id}`);
           } catch (structuredErr: any) {
             setErrorMsg(
-              `Could not save job to Cloud Database (${structuredErr?.message || 'Permission denied'}). Please reconnect Google Admin (rentpe.support.in@gmail.com) and try again.`
+              `Could not save job to Cloud Database (${structuredErr?.message || 'Permission denied'}). Please reconnect Google Admin (shinegroup565@gmail.com) and try again.`
             );
             setSubmitting(false);
             return;
@@ -430,7 +430,7 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
                     Connect Google Admin for Permanent Cloud Saving
                   </strong>
                   <p className="text-amber-800 mt-0.5 leading-relaxed">
-                    Sign in with <strong>rentpe.support.in@gmail.com</strong> so posted jobs save permanently in Cloud Database and stay visible for all users on Netlify.
+                    Sign in with <strong>shinegroup565@gmail.com</strong> so posted jobs save permanently in Cloud Database and stay visible for all users on Netlify.
                   </p>
                 </div>
               </div>

@@ -220,7 +220,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const email = (result.user.email || '').toLowerCase().trim();
       if (!isAuthorizedAdminEmail(email) || !result.user.emailVerified) {
         await signOut(auth).catch(() => {});
-        setErrorMessage(`Account "${email}" is not authorized as Admin. Please sign in with rentpe.support.in@gmail.com.`);
+        setErrorMessage(`Account "${email}" is not authorized as Admin. Please sign in with shinegroup565@gmail.com.`);
         return;
       }
       setIsCloudAdminReady(true);
@@ -1258,7 +1258,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     Connect Google Admin for Permanent Cloud Saving (Netlify Sync)
                   </strong>
                   <p className="text-amber-800 mt-0.5 leading-relaxed">
-                    Sign in with authorized admin Google account (<strong>rentpe.support.in@gmail.com</strong>) so every job post, edit, CMS notice, and certificate saves permanently in Cloud Database and never disappears.
+                    Sign in with authorized admin Google account (<strong>shinegroup565@gmail.com</strong>) so every job post, edit, CMS notice, and certificate saves permanently in Cloud Database and never disappears.
                   </p>
                 </div>
               </div>

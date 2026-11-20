@@ -106,7 +106,7 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
       const email = (result.user.email || '').toLowerCase().trim();
       if (!isAuthorizedAdminEmail(email) || !result.user.emailVerified) {
         await signOut(auth).catch(() => {});
-        setErrorMsg(`Account "${email}" is not authorized for Admin Desk. Please sign in with rentpe.support.in@gmail.com.`);
+        setErrorMsg(`Account "${email}" is not authorized for Admin Desk. Please sign in with shinegroup565@gmail.com.`);
         return;
       }
       setIsCloudAdminReady(true);
@@ -205,7 +205,7 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
       if (!isFirebaseAdminSession()) {
         if (!apiSaved) {
           setErrorMsg(
-            'Cloud Database connection required: Please click "Connect Google Admin (rentpe.support.in@gmail.com)" below so your edits save permanently on Netlify.'
+            'Cloud Database connection required: Please click "Connect Google Admin (shinegroup565@gmail.com)" below so your edits save permanently on Netlify.'
           );
           setSubmitting(false);
           return;
@@ -291,7 +291,7 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
               <div className="flex items-start gap-2">
                 <Cloud className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="font-bold">Connect Google Admin (rentpe.support.in@gmail.com)</strong>
+                  <strong className="font-bold">Connect Google Admin (shinegroup565@gmail.com)</strong>
                   <p className="text-amber-800 mt-0.5">Required so job updates persist permanently in Cloud Database on Netlify.</p>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 # Firestore Security Specification (`security_spec.md`)
 
 ## 1. Data Invariants & Access Model
-- **Admins (`isAdmin()`):** Authenticated users with `request.auth != null && request.auth.token.email_verified == true` and email in `['rentpe.support.in@gmail.com', 'admin@shinegroupjobs.com', 'admin@shinegroupjob.com']`.
+- **Admins (`isAdmin()`):** Authenticated users with `request.auth != null && request.auth.token.email_verified == true` and email in `['shinegroup565@gmail.com', 'admin@shinegroupjobs.com', 'admin@shinegroupjob.com']`.
 - **Job Vacancies (`/jobs/{jobId}`):** Publicly readable (`get`, `list`) by all portal visitors. Only verified Admins can `create`, `update`, or `delete` job postings. Every string, number, boolean, and array field is strictly type- and size-checked. `id` is immutable on update and validated via `isValidId(jobId)`.
 - **Website CMS Settings (`/site_settings/{settingId}`):** Publicly readable (`get`, `list`). Only verified Admins can write/update settings, enforced by `isValidSiteSettings()`.
 - **Users (`/users/{userId}`):** Strict PII isolation (`get` restricted to `isOwner(userId) || isAdmin()`, `list` restricted to `isAdmin() || resource.data.id == request.auth.uid`). Self-assigned admin roles are blocked: non-admin users may only create documents with `role == 'job_seeker'` and cannot mutate `id` or `role`.
@@ -13,7 +13,7 @@
 2. **Privilege Escalation (User Update):** Regular user updating their `/users/uid-123` doc to set `{ role: "admin" }` -> MUST fail (`PERMISSION_DENIED`).
 3. **Unauthenticated Job Creation:** Anonymous or non-admin signed-in job seeker attempting to create `/jobs/job-999` -> MUST fail (`PERMISSION_DENIED`).
 4. **Job Shadow Field Injection ("Ghost Field"):** Admin or user attempting to write `/jobs/job-999` with an undeclared field `{ isVerified: true, ghostField: "x" }` -> MUST fail (`PERMISSION_DENIED`).
-5. **Email Spoofing Attack:** User token containing `email: "rentpe.support.in@gmail.com"` with `email_verified: false` attempting admin write -> MUST fail (`PERMISSION_DENIED`).
+5. **Email Spoofing Attack:** User token containing `email: "shinegroup565@gmail.com"` with `email_verified: false` attempting admin write -> MUST fail (`PERMISSION_DENIED`).
 6. **PII Blanket Scrape (`/users`):** Signed-in non-admin job seeker calling `getDocs(collection(db, 'users'))` or `getDoc(doc(db, 'users', 'other-uid'))` -> MUST fail (`PERMISSION_DENIED`).
 7. **PII Blanket Scrape (`/applications`):** Signed-in non-admin querying `/applications` without ownership constraint or reading another candidate's application -> MUST fail (`PERMISSION_DENIED`).
 8. **Certificate Approval Bypass:** Non-admin submitting `/certificates/cert-999` directly with `{ status: "Approved" }` -> MUST fail (`PERMISSION_DENIED`).
