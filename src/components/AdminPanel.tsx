@@ -41,26 +41,53 @@ import {
   Printer,
   QrCode,
   Copy,
-  Check
+  Check,
+  Cloud,
+  Loader2
 } from 'lucide-react';
 import { Job, JobApplication, User, WebsiteSettings, UploadedResumeFile, CandidateCertificate, CertificateStatus, CertificateType } from '../types.js';
+import { INITIAL_JOBS } from '../data/initialJobs.js';
 import { EditJobModal } from './EditJobModal.js';
 import { CertificateModal } from './CertificateModal.js';
 import { 
   getStoredUsers, 
   setLocalJobStatus, 
+  updateLocalCustomJob,
   deleteLocalJob, 
   updateLocalApplicationStatus, 
   saveStoredSettings,
+  INITIAL_CERTIFICATES,
   getStoredCertificates,
   approveCertificate,
   rejectCertificate,
   adminDirectIssueCertificate,
   deleteLocalCertificate,
   deleteLocalUser,
-  deleteLocalApplication
+  deleteLocalApplication,
+  generateUniqueCertNumber
 } from '../utils/localPersistence.js';
-import { db, collection, getDocs } from '../firebase.js';
+import {
+  db,
+  auth,
+  googleProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  getDocs,
+  isFirebaseAdminSession,
+  isAuthorizedAdminEmail,
+  formatFirebaseAuthError,
+  sanitizeJobForFirestore,
+  sanitizeApplicationForFirestore,
+  sanitizeCertificateForFirestore,
+  sanitizeSiteSettingsForFirestore,
+  handleFirestoreError,
+  OperationType
+} from '../firebase.js';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -75,7 +102,7 @@ interface AdminPanelProps {
   onRefreshApplications: () => void;
   onRefreshSettings: () => void;
   onSelectJob: (job: Job) => void;
-  onDeleteJob?: (jobId: string) => void;
+  onDeleteJob?: (jobId: string) => void | Promise<void>;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -158,9 +185,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [cmsSettings, setCmsSettings] = useState<WebsiteSettings>(websiteSettings);
   const [cmsSaving, setCmsSaving] = useState(false);
 
-  // Feedback notifications
+  // Feedback notifications & Cloud Admin Session State
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [isCloudAdminReady, setIsCloudAdminReady] = useState(() => isFirebaseAdminSession());
+  const [googleConnecting, setGoogleConnecting] = useState(false);
 
   // In-App Confirmation Modal state (prevents iframe popup blocking)
   const [confirmModal, setConfirmModal] = useState<{
@@ -182,6 +212,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setCmsSettings(websiteSettings);
   }, [websiteSettings]);
 
+  const handleConnectGoogleAdmin = async () => {
+    setGoogleConnecting(true);
+    setErrorMessage(null);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const email = (result.user.email || '').toLowerCase().trim();
+      if (!isAuthorizedAdminEmail(email) || !result.user.emailVerified) {
+        await signOut(auth).catch(() => {});
+        setErrorMessage(`Account "${email}" is not authorized as Admin. Please sign in with rentpe.support.in@gmail.com.`);
+        return;
+      }
+      setIsCloudAdminReady(true);
+      setFeedbackMessage(`Cloud Database connected via ${email}. All changes save permanently across Netlify!`);
+      setTimeout(() => setFeedbackMessage(null), 5000);
+      fetchUsers();
+      refreshCertificates();
+      onRefreshJobs();
+      onRefreshApplications();
+      onRefreshSettings();
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setErrorMessage(formatFirebaseAuthError(err));
+      }
+    } finally {
+      setGoogleConnecting(false);
+    }
+  };
+
   // Fetch registered users for user management tab
   const fetchUsers = async () => {
     setUsersLoading(true);
@@ -202,12 +260,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         }
       }
     } catch (e) {
-      console.warn('Failed to load users from API, loading local users:', e);
+      console.warn('Failed to load users from API, loading Cloud/local users:', e);
     }
-    // Netlify static & Cloud Firestore lookup
-    try {
-      const snap = await getDocs(collection(db, 'users'));
-      if (!snap.empty) {
+
+    // Only query Firestore /users if Google Admin session is authenticated (rules isolate /users PII)
+    if (isFirebaseAdminSession()) {
+      try {
+        const snap = await getDocs(collection(db, 'users'));
         const firestoreUsers: any[] = [];
         snap.forEach(d => {
           const data = d.data();
@@ -237,9 +296,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         setRegisteredUsers(combined);
         setUsersLoading(false);
         return;
+      } catch (fsErr) {
+        console.warn('Firestore users fetch notice:', fsErr);
       }
-    } catch (fsErr) {
-      console.warn('Firestore users fetch notice:', fsErr);
     }
 
     // Fallback to local storage
@@ -255,8 +314,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, () => {
+      const ready = isFirebaseAdminSession();
+      setIsCloudAdminReady(ready);
+      if (currentUser?.role === 'admin' && ready) {
+        fetchUsers();
+      }
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  useEffect(() => {
     if (currentUser?.role === 'admin') {
       fetchUsers();
+      refreshCertificates();
     }
   }, [currentUser]);
 
@@ -364,10 +435,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     (u.phone && u.phone.includes(userSearch))
   );
 
-  // Toggle Job Status
+  // Toggle Job Status (Cloud Firestore + API + Local)
   const handleToggleJobStatus = async (job: Job) => {
     setActionLoadingId(job.id);
-    const newStatus = job.status === 'Active' ? 'Closed' : 'Active';
+    setErrorMessage(null);
+    const newStatus: 'Active' | 'Closed' = job.status === 'Active' ? 'Closed' : 'Active';
+    let apiSaved = false;
+
     try {
       const res = await fetch(`/api/jobs/${job.id}/status`, {
         method: 'PATCH',
@@ -381,18 +455,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         await res.json();
+        apiSaved = true;
       }
     } catch (err) {
-      console.warn('Backend job status update failed, saving locally:', err);
+      console.warn('Backend job status update failed, syncing via Cloud Firestore:', err);
     }
+
+    if (isFirebaseAdminSession()) {
+      try {
+        await setDoc(
+          doc(db, 'jobs', job.id),
+          sanitizeJobForFirestore({ ...job, status: newStatus }),
+          { merge: true }
+        );
+      } catch (fsErr) {
+        try {
+          handleFirestoreError(fsErr, OperationType.UPDATE, `jobs/${job.id}`);
+        } catch (structuredErr: any) {
+          setErrorMessage(`Cloud status update failed: ${structuredErr?.message || 'Permission denied'}`);
+          setActionLoadingId(null);
+          return;
+        }
+      }
+    } else if (!apiSaved) {
+      setErrorMessage('Please click "Connect Google Admin" at the top so status changes save permanently on Netlify.');
+      setActionLoadingId(null);
+      return;
+    }
+
     setLocalJobStatus(job.id, newStatus);
-    setFeedbackMessage(`Job '${job.title}' marked as ${newStatus}`);
+    updateLocalCustomJob({ ...job, status: newStatus });
+    setFeedbackMessage(`Job '${job.title}' marked as ${newStatus} (Saved permanently).`);
     onRefreshJobs();
     setActionLoadingId(null);
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
-  // Delete Job (Safe In-App Modal)
+  // Delete Job (Safe In-App Modal + Cloud Firestore)
   const handleDeleteJob = (job: Job) => {
     setConfirmModal({
       isOpen: true,
@@ -402,22 +501,48 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       confirmLabel: 'Delete Vacancy',
       onConfirm: async () => {
         setActionLoadingId(job.id);
-        deleteLocalJob(job.id);
+        setErrorMessage(null);
+
+        if (!isFirebaseAdminSession()) {
+          // Still attempt API delete, otherwise notify if static Netlify needs Google Admin
+          let apiDeleted = false;
+          try {
+            const res = await fetch(`/api/jobs/${job.id}`, {
+              method: 'DELETE',
+              headers: {
+                'x-user-role': 'admin',
+                'Authorization': 'Bearer admin-token'
+              }
+            });
+            const ct = res.headers.get('content-type') || '';
+            if (res.ok && ct.includes('application/json')) apiDeleted = true;
+          } catch {
+            // ignore
+          }
+          if (!apiDeleted) {
+            setErrorMessage('Please click "Connect Google Admin" at the top so job deletion syncs permanently across Netlify.');
+          }
+        }
+
         if (onDeleteJob) {
-          onDeleteJob(job.id);
-        }
-        setFeedbackMessage(`Job opening '${job.title}' deleted successfully.`);
-        try {
-          await fetch(`/api/jobs/${job.id}`, {
-            method: 'DELETE',
-            headers: {
-              'x-user-role': 'admin',
-              'Authorization': 'Bearer admin-token'
+          await onDeleteJob(job.id);
+        } else {
+          deleteLocalJob(job.id);
+          if (isFirebaseAdminSession()) {
+            const isSeedJob = INITIAL_JOBS.some(ij => ij.id === job.id);
+            if (isSeedJob) {
+              await setDoc(
+                doc(db, 'jobs', job.id),
+                sanitizeJobForFirestore({ ...job, isDeleted: true }),
+                { merge: true }
+              );
+            } else {
+              await deleteDoc(doc(db, 'jobs', job.id));
             }
-          });
-        } catch (err) {
-          console.warn('Backend job delete sync failed, removed locally:', err);
+          }
         }
+
+        setFeedbackMessage(`Job opening '${job.title}' deleted successfully.`);
         onRefreshJobs();
         setActionLoadingId(null);
         setTimeout(() => setFeedbackMessage(null), 4000);
@@ -425,9 +550,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     });
   };
 
-  // Update Application Status
+  // Update Application Status (Cloud Firestore + API + Local)
   const handleUpdateAppStatus = async (appId: string, newStatus: JobApplication['status']) => {
     setActionLoadingId(appId);
+    setErrorMessage(null);
+    let apiSaved = false;
+
     try {
       const res = await fetch(`/api/applications/${appId}/status`, {
         method: 'PATCH',
@@ -441,10 +569,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         await res.json();
+        apiSaved = true;
       }
     } catch (err) {
-      console.warn('Backend app status update failed, saving locally:', err);
+      console.warn('Backend app status update failed, syncing via Cloud Firestore:', err);
     }
+
+    const targetApp = applications.find(a => a.id === appId);
+    if (isFirebaseAdminSession() && targetApp) {
+      try {
+        await setDoc(
+          doc(db, 'applications', appId),
+          sanitizeApplicationForFirestore({ ...targetApp, status: newStatus }),
+          { merge: true }
+        );
+      } catch (fsErr) {
+        try {
+          handleFirestoreError(fsErr, OperationType.UPDATE, `applications/${appId}`);
+        } catch (structuredErr: any) {
+          setErrorMessage(`Could not sync application status to cloud: ${structuredErr?.message || 'Permission denied'}`);
+          setActionLoadingId(null);
+          return;
+        }
+      }
+    } else if (!apiSaved && !isFirebaseAdminSession()) {
+      setErrorMessage('Connect Google Admin at the top to save application stage updates permanently on Netlify.');
+    }
+
     updateLocalApplicationStatus(appId, newStatus);
     setFeedbackMessage(`Candidate status updated: ${newStatus}`);
     onRefreshApplications();
@@ -452,7 +603,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
-  // Delete User Account (Safe In-App Modal)
+  // Delete User Account (Safe In-App Modal + Cloud Firestore)
   const handleDeleteUser = (userId: string, userName: string) => {
     setConfirmModal({
       isOpen: true,
@@ -464,6 +615,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         setActionLoadingId(userId);
         deleteLocalUser(userId);
         setRegisteredUsers(prev => prev.filter(u => u.id !== userId));
+
+        if (isFirebaseAdminSession()) {
+          try {
+            await deleteDoc(doc(db, 'users', userId));
+          } catch (fsErr) {
+            console.warn('Firestore user delete failed:', fsErr);
+          }
+        }
+
         setFeedbackMessage(`User account '${userName}' removed successfully.`);
         try {
           await fetch(`/api/admin/users/${userId}`, {
@@ -483,7 +643,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     });
   };
 
-  // Delete Candidate Job Application (Safe In-App Modal)
+  // Delete Candidate Job Application (Safe In-App Modal + Cloud Firestore)
   const handleDeleteApplication = (appId: string, candidateName: string) => {
     setConfirmModal({
       isOpen: true,
@@ -494,6 +654,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       onConfirm: async () => {
         setActionLoadingId(appId);
         deleteLocalApplication(appId);
+
+        if (isFirebaseAdminSession()) {
+          try {
+            await deleteDoc(doc(db, 'applications', appId));
+          } catch (fsErr) {
+            console.warn('Firestore application delete failed:', fsErr);
+          }
+        }
+
         setFeedbackMessage(`Application for '${candidateName}' deleted successfully.`);
         try {
           await fetch(`/api/applications/${appId}`, {
@@ -513,10 +682,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     });
   };
 
-  // Save Website CMS Settings (Website Update)
+  // Save Website CMS Settings (Cloud Firestore + API + Local)
   const handleSaveCmsSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setCmsSaving(true);
+    setErrorMessage(null);
+    let apiSaved = false;
+
     try {
       const res = await fetch('/api/site-settings', {
         method: 'PATCH',
@@ -530,19 +702,77 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         await res.json();
+        apiSaved = true;
       }
     } catch (err) {
-      console.warn('Backend settings update failed, saving locally:', err);
+      console.warn('Backend settings update failed, syncing via Cloud Firestore:', err);
     }
+
+    if (isFirebaseAdminSession()) {
+      try {
+        await setDoc(
+          doc(db, 'site_settings', 'main'),
+          sanitizeSiteSettingsForFirestore(cmsSettings),
+          { merge: true }
+        );
+      } catch (fsErr) {
+        try {
+          handleFirestoreError(fsErr, OperationType.WRITE, 'site_settings/main');
+        } catch (structuredErr: any) {
+          setErrorMessage(`Could not save website settings to cloud: ${structuredErr?.message || 'Permission denied'}`);
+          setCmsSaving(false);
+          return;
+        }
+      }
+    } else if (!apiSaved) {
+      setErrorMessage('Please click "Connect Google Admin" at the top to save Website CMS & Announcement settings permanently across Netlify.');
+      setCmsSaving(false);
+      return;
+    }
+
     saveStoredSettings(cmsSettings);
-    setFeedbackMessage('Website settings & announcement notice updated live!');
+    setFeedbackMessage('Website settings & announcement notice updated permanently!');
     onRefreshSettings();
     setCmsSaving(false);
     setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
   // ---------------- CERTIFICATES ACTION HANDLERS ---------------- //
-  const refreshCertificates = () => {
+  const refreshCertificates = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'certificates'));
+      const deletedIds = new Set<string>();
+      const firestoreCerts: CandidateCertificate[] = [];
+
+      snap.forEach((d) => {
+        const data = d.data() as CandidateCertificate & { isDeleted?: boolean };
+        const id = data.id || d.id;
+        if (data.isDeleted) {
+          deletedIds.add(id);
+        } else {
+          firestoreCerts.push({ ...data, id });
+        }
+      });
+
+      const mergedMap = new Map<string, CandidateCertificate>();
+      for (const ic of INITIAL_CERTIFICATES) {
+        mergedMap.set(ic.id, ic);
+      }
+      for (const fc of firestoreCerts) {
+        mergedMap.set(fc.id, fc);
+      }
+
+      const activeCerts = Array.from(mergedMap.values()).filter(c => !deletedIds.has(c.id));
+      try {
+        localStorage.setItem('shine_certificates', JSON.stringify(activeCerts));
+      } catch {
+        // ignore quota errors
+      }
+      setCertificates(activeCerts);
+      return;
+    } catch (fsErr) {
+      console.warn('Firestore certificates refresh notice, falling back to local:', fsErr);
+    }
     setCertificates(getStoredCertificates());
   };
 
@@ -566,8 +796,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleConfirmApproval = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reviewingCert) return;
+    setErrorMessage(null);
+    let apiSaved = false;
+
     try {
-      await fetch(`/api/certificates/${reviewingCert.id}/approve`, {
+      const res = await fetch(`/api/certificates/${reviewingCert.id}/approve`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -576,17 +809,55 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         body: JSON.stringify(approvalForm)
       });
+      if (res.ok) apiSaved = true;
     } catch (err) {
-      console.warn('Backend certificate approval sync failed, saving locally:', err);
+      console.warn('Backend certificate approval sync failed, syncing via Cloud Firestore:', err);
     }
 
-    const updated = approveCertificate(reviewingCert.id, approvalForm);
-    if (updated) {
-      setFeedbackMessage(`Certificate ${updated.certificateNumber} approved & issued for ${updated.candidateName}!`);
-      refreshCertificates();
-      setReviewingCert(null);
-      setTimeout(() => setFeedbackMessage(null), 4000);
+    const todayFormatted = new Date().toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+
+    const updatedCert: CandidateCertificate = {
+      ...reviewingCert,
+      certificateNumber: approvalForm.certificateNumber || reviewingCert.certificateNumber || generateUniqueCertNumber(),
+      issueDate: approvalForm.issueDate || todayFormatted,
+      grade: approvalForm.grade || 'Grade A+ (Distinction)',
+      adminRemarks: approvalForm.adminRemarks || reviewingCert.adminRemarks,
+      approvedBy: approvalForm.approvedBy || 'Director, Shine Group Jobs Placement Desk',
+      approvedDate: new Date().toISOString().split('T')[0],
+      signatoryTitle: approvalForm.signatoryTitle || 'Placement Director • Jabalpur Office',
+      status: 'Approved'
+    };
+
+    if (isFirebaseAdminSession()) {
+      try {
+        await setDoc(
+          doc(db, 'certificates', updatedCert.id),
+          sanitizeCertificateForFirestore(updatedCert),
+          { merge: true }
+        );
+      } catch (fsErr) {
+        try {
+          handleFirestoreError(fsErr, OperationType.UPDATE, `certificates/${updatedCert.id}`);
+        } catch (structuredErr: any) {
+          setErrorMessage(`Could not approve certificate in Cloud Database: ${structuredErr?.message || 'Permission denied'}`);
+          return;
+        }
+      }
+    } else if (!apiSaved) {
+      setErrorMessage('Please click "Connect Google Admin" at the top so certificate approvals save permanently on Netlify.');
+      return;
     }
+
+    approveCertificate(reviewingCert.id, approvalForm);
+    setCertificates(prev => prev.map(c => (c.id === updatedCert.id ? updatedCert : c)));
+    setFeedbackMessage(`Certificate ${updatedCert.certificateNumber} approved & issued for ${updatedCert.candidateName}!`);
+    await refreshCertificates();
+    setReviewingCert(null);
+    setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
   const handleOpenReject = (cert: CandidateCertificate) => {
@@ -597,8 +868,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleConfirmRejection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectingCert) return;
+    setErrorMessage(null);
+    let apiSaved = false;
+
     try {
-      await fetch(`/api/certificates/${rejectingCert.id}/reject`, {
+      const res = await fetch(`/api/certificates/${rejectingCert.id}/reject`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -607,28 +881,56 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         body: JSON.stringify({ reason: rejectionReason })
       });
+      if (res.ok) apiSaved = true;
     } catch (err) {
-      console.warn('Backend certificate rejection sync failed, saving locally:', err);
+      console.warn('Backend certificate rejection sync failed, syncing via Cloud Firestore:', err);
     }
 
-    const updated = rejectCertificate(rejectingCert.id, rejectionReason);
-    if (updated) {
-      setFeedbackMessage(`Certificate request for ${updated.candidateName} marked as rejected.`);
-      refreshCertificates();
-      setRejectingCert(null);
-      setTimeout(() => setFeedbackMessage(null), 4000);
+    const updatedCert: CandidateCertificate = {
+      ...rejectingCert,
+      status: 'Rejected',
+      rejectionReason: rejectionReason || 'Record verification details could not be validated by administration.'
+    };
+
+    if (isFirebaseAdminSession()) {
+      try {
+        await setDoc(
+          doc(db, 'certificates', updatedCert.id),
+          sanitizeCertificateForFirestore(updatedCert),
+          { merge: true }
+        );
+      } catch (fsErr) {
+        try {
+          handleFirestoreError(fsErr, OperationType.UPDATE, `certificates/${updatedCert.id}`);
+        } catch (structuredErr: any) {
+          setErrorMessage(`Could not reject certificate in Cloud Database: ${structuredErr?.message || 'Permission denied'}`);
+          return;
+        }
+      }
+    } else if (!apiSaved) {
+      setErrorMessage('Please click "Connect Google Admin" at the top so certificate updates save permanently on Netlify.');
+      return;
     }
+
+    rejectCertificate(rejectingCert.id, rejectionReason);
+    setCertificates(prev => prev.map(c => (c.id === updatedCert.id ? updatedCert : c)));
+    setFeedbackMessage(`Certificate request for ${updatedCert.candidateName} marked as rejected.`);
+    await refreshCertificates();
+    setRejectingCert(null);
+    setTimeout(() => setFeedbackMessage(null), 4000);
   };
 
   const handleDirectIssueSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
     if (!directIssueForm.candidateName.trim() || !directIssueForm.courseOrRole.trim()) {
-      alert('Please fill candidate name and course/role.');
+      setErrorMessage('Please fill candidate name and course/role.');
       return;
     }
 
+    let apiSaved = false;
     try {
-      await fetch('/api/certificates/direct-issue', {
+      const res = await fetch('/api/certificates/direct-issue', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -637,13 +939,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         body: JSON.stringify(directIssueForm)
       });
+      if (res.ok) apiSaved = true;
     } catch (err) {
-      console.warn('Backend direct certificate issue sync failed, saving locally:', err);
+      console.warn('Backend direct certificate issue sync failed, syncing via Cloud Firestore:', err);
+    }
+
+    if (!isFirebaseAdminSession() && !apiSaved) {
+      setErrorMessage('Please click "Connect Google Admin" at the top so issued certificates save permanently on Netlify.');
+      return;
     }
 
     const newCert = adminDirectIssueCertificate(directIssueForm);
+    if (isFirebaseAdminSession()) {
+      try {
+        await setDoc(
+          doc(db, 'certificates', newCert.id),
+          sanitizeCertificateForFirestore(newCert)
+        );
+      } catch (fsErr) {
+        try {
+          handleFirestoreError(fsErr, OperationType.CREATE, `certificates/${newCert.id}`);
+        } catch (structuredErr: any) {
+          setErrorMessage(`Could not save certificate to Cloud Database: ${structuredErr?.message || 'Permission denied'}`);
+          return;
+        }
+      }
+    }
+
     setFeedbackMessage(`Certificate ${newCert.certificateNumber} generated and issued for ${newCert.candidateName}!`);
-    refreshCertificates();
+    await refreshCertificates();
     setIsDirectIssueOpen(false);
     setDirectIssueForm({
       candidateName: '',
@@ -661,6 +985,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleDeleteCert = (certId: string, certNumber: string) => {
+    const targetCert = certificates.find(c => c.id === certId);
     setConfirmModal({
       isOpen: true,
       title: 'Delete Certificate Record',
@@ -670,6 +995,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       onConfirm: async () => {
         deleteLocalCertificate(certId);
         setCertificates(prev => prev.filter(c => c.id !== certId && c.certificateNumber !== certNumber));
+
+        if (isFirebaseAdminSession()) {
+          const isSeedCert = INITIAL_CERTIFICATES.some(ic => ic.id === certId);
+          try {
+            if (isSeedCert) {
+              await setDoc(
+                doc(db, 'certificates', certId),
+                sanitizeCertificateForFirestore({
+                  ...(targetCert || { id: certId, certificateNumber: certNumber }),
+                  isDeleted: true
+                }),
+                { merge: true }
+              );
+            } else {
+              await deleteDoc(doc(db, 'certificates', certId));
+            }
+          } catch (fsErr) {
+            console.warn('Firestore certificate delete failed:', fsErr);
+          }
+        }
+
         setFeedbackMessage(`Certificate '${certNumber}' removed from records.`);
         try {
           await fetch(`/api/certificates/${certId}`, {
@@ -682,7 +1028,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         } catch (err) {
           console.warn('Backend certificate delete sync failed, removed locally:', err);
         }
-        refreshCertificates();
+        await refreshCertificates();
         setTimeout(() => setFeedbackMessage(null), 4000);
       }
     });
@@ -901,6 +1247,53 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         {/* Dynamic Admin Content Pane */}
         <main className="grow space-y-6">
+
+          {/* Cloud Database Connection Banner for Netlify Permanent Storage */}
+          {!isCloudAdminReady && (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-start gap-2.5">
+                <Cloud className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="font-bold text-sm text-amber-950 block">
+                    Connect Google Admin for Permanent Cloud Saving (Netlify Sync)
+                  </strong>
+                  <p className="text-amber-800 mt-0.5 leading-relaxed">
+                    Sign in with authorized admin Google account (<strong>rentpe.support.in@gmail.com</strong>) so every job post, edit, CMS notice, and certificate saves permanently in Cloud Database and never disappears.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleConnectGoogleAdmin}
+                disabled={googleConnecting}
+                className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shrink-0 flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                {googleConnecting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4 text-amber-400" />
+                )}
+                <span>Connect Google Admin</span>
+              </button>
+            </div>
+          )}
+
+          {/* Global Error notification banner */}
+          {errorMessage && (
+            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center justify-between gap-2 shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setErrorMessage(null)}
+                className="p-1 rounded-lg hover:bg-rose-100 text-rose-600 cursor-pointer shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
           
           {/* Global Feedback notification banner */}
           {feedbackMessage && (

@@ -13,10 +13,30 @@ import {
   Image as ImageIcon,
   UploadCloud,
   FileImage,
-  Trash2
+  Trash2,
+  Cloud,
+  ShieldCheck,
+  Loader2
 } from 'lucide-react';
 import { Job } from '../types.js';
 import { updateLocalCustomJob } from '../utils/localPersistence.js';
+import {
+  db,
+  auth,
+  googleProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  doc,
+  setDoc,
+  isFirebaseAdminSession,
+  isAuthorizedAdminEmail,
+  formatFirebaseAuthError,
+  compressImageDataUrl,
+  sanitizeJobForFirestore,
+  handleFirestoreError,
+  OperationType
+} from '../firebase.js';
 
 interface EditJobModalProps {
   job: Job | null;
@@ -35,8 +55,17 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
   const [imageMeta, setImageMeta] = useState<{ name: string; size: number } | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [isCloudAdminReady, setIsCloudAdminReady] = useState(() => isFirebaseAdminSession());
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, () => {
+      setIsCloudAdminReady(isFirebaseAdminSession());
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (job) {
@@ -65,8 +94,30 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
       setImageError(null);
       setErrorMsg('');
       setSuccessMsg('');
+      setIsCloudAdminReady(isFirebaseAdminSession());
     }
   }, [job]);
+
+  const handleConnectGoogleAdmin = async () => {
+    setGoogleConnecting(true);
+    setErrorMsg('');
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const email = (result.user.email || '').toLowerCase().trim();
+      if (!isAuthorizedAdminEmail(email) || !result.user.emailVerified) {
+        await signOut(auth).catch(() => {});
+        setErrorMsg(`Account "${email}" is not authorized for Admin Desk. Please sign in with rentpe.support.in@gmail.com.`);
+        return;
+      }
+      setIsCloudAdminReady(true);
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setErrorMsg(formatFirebaseAuthError(err));
+      }
+    } finally {
+      setGoogleConnecting(false);
+    }
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setImageError(null);
@@ -85,9 +136,14 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
     }
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const result = reader.result as string;
-      setFormData(prev => ({ ...prev, imageUrl: result }));
+      const optimized = await compressImageDataUrl(result, 550000);
+      if (!optimized && result.length > 780000) {
+        setImageError('Image could not be compressed below 780 KB for cloud storage. Please choose a smaller image.');
+        return;
+      }
+      setFormData(prev => ({ ...prev, imageUrl: optimized || result }));
       setImageMeta({ name: file.name, size: file.size });
     };
     reader.onerror = () => {
@@ -111,10 +167,17 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
     setSuccessMsg('');
 
     try {
+      const optimizedImage = formData.imageUrl
+        ? await compressImageDataUrl(formData.imageUrl, 550000)
+        : '';
+
       let updatedJob: Job = {
         ...job,
-        ...formData
+        ...formData,
+        imageUrl: optimizedImage || undefined
       };
+
+      let apiSaved = false;
 
       try {
         const res = await fetch(`/api/jobs/${job.id}`, {
@@ -124,7 +187,7 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
             'x-user-role': 'admin',
             'Authorization': 'Bearer admin-token'
           },
-          body: JSON.stringify(formData)
+          body: JSON.stringify({ ...formData, imageUrl: optimizedImage || '' })
         });
 
         const contentType = res.headers.get('content-type') || '';
@@ -132,27 +195,47 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
           const data = await res.json();
           if (data.success && data.job) {
             updatedJob = data.job;
+            apiSaved = true;
           }
         }
       } catch (netErr) {
-        console.warn('Backend server not reachable for job update, saving locally:', netErr);
+        console.warn('Backend server not reachable for job update, syncing via Cloud Firestore:', netErr);
+      }
+
+      if (!isFirebaseAdminSession()) {
+        if (!apiSaved) {
+          setErrorMsg(
+            'Cloud Database connection required: Please click "Connect Google Admin (rentpe.support.in@gmail.com)" below so your edits save permanently on Netlify.'
+          );
+          setSubmitting(false);
+          return;
+        }
+      } else {
+        const firestorePayload = sanitizeJobForFirestore(updatedJob);
+        try {
+          await setDoc(doc(db, 'jobs', updatedJob.id), firestorePayload, { merge: true });
+        } catch (fsErr) {
+          try {
+            handleFirestoreError(fsErr, OperationType.WRITE, `jobs/${updatedJob.id}`);
+          } catch (structuredErr: any) {
+            setErrorMsg(
+              `Could not update job in Cloud Database (${structuredErr?.message || 'Permission denied'}). Please reconnect Google Admin.`
+            );
+            setSubmitting(false);
+            return;
+          }
+        }
       }
 
       updateLocalCustomJob(updatedJob);
-      setSuccessMsg('Job opening updated successfully!');
+      setSuccessMsg('Job opening updated permanently in Cloud Database!');
       onJobUpdated(updatedJob);
       setTimeout(() => {
         onClose();
       }, 900);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      const fallbackJob: Job = { ...job, ...formData };
-      updateLocalCustomJob(fallbackJob);
-      setSuccessMsg('Job opening updated successfully (saved locally)!');
-      onJobUpdated(fallbackJob);
-      setTimeout(() => {
-        onClose();
-      }, 900);
+      setErrorMsg(err?.message || 'Failed to update job opening. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -202,6 +285,27 @@ export const EditJobModal: React.FC<EditJobModalProps> = ({
 
         {/* Scrollable Edit Form */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 text-xs text-slate-700">
+
+          {!isCloudAdminReady && (
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <Cloud className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="font-bold">Connect Google Admin (rentpe.support.in@gmail.com)</strong>
+                  <p className="text-amber-800 mt-0.5">Required so job updates persist permanently in Cloud Database on Netlify.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleConnectGoogleAdmin}
+                disabled={googleConnecting}
+                className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shrink-0 flex items-center gap-1.5 cursor-pointer"
+              >
+                {googleConnecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />}
+                <span>Connect Google Admin</span>
+              </button>
+            </div>
+          )}
           
           {errorMsg && (
             <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">

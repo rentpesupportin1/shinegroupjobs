@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Award, 
   ShieldCheck, 
@@ -18,14 +18,28 @@ import {
   Sparkles,
   ExternalLink,
   ChevronRight,
-  Download
+  Download,
+  AlertCircle
 } from 'lucide-react';
 import { CandidateCertificate, CertificateType, User } from '../types.js';
 import { 
   getStoredCertificates, 
   saveCertificateRequest, 
-  findCertificateByNumber 
+  findCertificateByNumber,
+  INITIAL_CERTIFICATES
 } from '../utils/localPersistence.js';
+import {
+  db,
+  collection,
+  doc,
+  getDocs,
+  setDoc,
+  query,
+  where,
+  sanitizeCertificateForFirestore,
+  handleFirestoreError,
+  OperationType
+} from '../firebase.js';
 import { CertificateModal } from './CertificateModal.js';
 
 interface CertificateGeneratorViewProps {
@@ -57,11 +71,45 @@ export const CertificateGeneratorView: React.FC<CertificateGeneratorViewProps> =
   });
 
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [submissionSuccess, setSubmissionSuccess] = useState<CandidateCertificate | null>(null);
 
   // Search by Unique Certificate Number State
   const [searchNumber, setSearchNumber] = useState('');
   const [searchResult, setSearchResult] = useState<CandidateCertificate | null | 'not_found'>(null);
+
+  const loadCertificatesFromCloud = async () => {
+    try {
+      const snap = await getDocs(collection(db, 'certificates'));
+      const cloudMap = new Map<string, CandidateCertificate>();
+      for (const seed of INITIAL_CERTIFICATES) {
+        cloudMap.set(seed.id, seed);
+      }
+      for (const local of getStoredCertificates()) {
+        cloudMap.set(local.id, local);
+      }
+      snap.forEach(d => {
+        const data = d.data() as CandidateCertificate & { isDeleted?: boolean };
+        if (data.isDeleted) {
+          cloudMap.delete(d.id);
+        } else {
+          cloudMap.set(d.id, data);
+        }
+      });
+      setCertificates(Array.from(cloudMap.values()));
+    } catch (fsErr) {
+      try {
+        handleFirestoreError(fsErr, OperationType.LIST, 'certificates');
+      } catch (loggedErr) {
+        console.warn('Firestore certificates fetch notice:', loggedErr);
+      }
+      setCertificates(getStoredCertificates());
+    }
+  };
+
+  useEffect(() => {
+    loadCertificatesFromCloud();
+  }, []);
 
   // Filter certificates for current user
   const userCertificates = React.useMemo(() => {
@@ -86,15 +134,16 @@ export const CertificateGeneratorView: React.FC<CertificateGeneratorViewProps> =
 
   const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!formData.candidateName.trim() || !formData.candidateEmail.trim() || !formData.courseOrRole.trim()) {
-      alert('Please fill candidate name, email, and course/role.');
+      setFormError('Please fill candidate name, email, and course/role.');
       return;
     }
 
     setSubmitting(true);
 
     try {
-      // Netlify / local storage first for resilience
+      // Create request object
       const newCert = saveCertificateRequest({
         candidateName: formData.candidateName,
         fatherName: formData.fatherName,
@@ -106,6 +155,17 @@ export const CertificateGeneratorView: React.FC<CertificateGeneratorViewProps> =
         remarks: formData.remarks
       });
 
+      // Sync to Cloud Firestore for cross-device Admin approval on Netlify
+      try {
+        await setDoc(doc(db, 'certificates', newCert.id), sanitizeCertificateForFirestore(newCert));
+      } catch (fsErr) {
+        try {
+          handleFirestoreError(fsErr, OperationType.CREATE, `certificates/${newCert.id}`);
+        } catch (loggedErr) {
+          console.warn('Firestore certificate request sync notice:', loggedErr);
+        }
+      }
+
       // Try sending to server if online
       try {
         await fetch('/api/certificates/request', {
@@ -114,10 +174,10 @@ export const CertificateGeneratorView: React.FC<CertificateGeneratorViewProps> =
           body: JSON.stringify(newCert)
         });
       } catch (err) {
-        console.warn('Backend server not reachable, saved certificate request locally:', err);
+        console.warn('Backend server not reachable, synced certificate request to cloud:', err);
       }
 
-      setCertificates(getStoredCertificates());
+      await loadCertificatesFromCloud();
       setSubmissionSuccess(newCert);
       setShowRequestForm(false);
       
@@ -129,19 +189,42 @@ export const CertificateGeneratorView: React.FC<CertificateGeneratorViewProps> =
       }));
     } catch (err) {
       console.error('Error submitting certificate request:', err);
-      alert('Could not submit request. Please try again.');
+      setFormError('Could not submit request. Please try again.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleSearchCertificate = (e: React.FormEvent) => {
+  const handleSearchCertificate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchNumber.trim()) return;
+    const clean = searchNumber.trim().toUpperCase();
 
-    const found = findCertificateByNumber(searchNumber.trim());
-    if (found) {
-      setSearchResult(found);
+    const foundInState = certificates.find(
+      c => c.certificateNumber.trim().toUpperCase() === clean
+    );
+    if (foundInState) {
+      setSearchResult(foundInState);
+      return;
+    }
+
+    try {
+      const q = query(collection(db, 'certificates'), where('certificateNumber', '==', clean));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const docData = snap.docs[0].data() as CandidateCertificate & { isDeleted?: boolean };
+        if (!docData.isDeleted) {
+          setSearchResult(docData);
+          return;
+        }
+      }
+    } catch (fsErr) {
+      console.warn('Cloud certificate lookup notice:', fsErr);
+    }
+
+    const foundLocal = findCertificateByNumber(clean);
+    if (foundLocal) {
+      setSearchResult(foundLocal);
     } else {
       setSearchResult('not_found');
     }
@@ -339,6 +422,12 @@ export const CertificateGeneratorView: React.FC<CertificateGeneratorViewProps> =
           </div>
 
           <form onSubmit={handleRequestSubmit} className="mt-6 space-y-5">
+            {formError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{formError}</span>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               
               {/* Candidate Name */}

@@ -5,35 +5,54 @@
       "description": "User profile for job seekers and administrators",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string", "maxLength": 100 },
-        "email": { "type": "string", "maxLength": 150 },
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 160 },
         "role": { "type": "string", "enum": ["job_seeker", "admin"] },
-        "phone": { "type": "string", "maxLength": 25 },
-        "createdAt": { "type": "string" }
+        "phone": { "type": "string", "maxLength": 30 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "lastLoginAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "name", "email", "role"]
     },
     "Job": {
       "title": "Job",
-      "description": "Job opening vacancy",
+      "description": "Job opening vacancy posted by verified administrators",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "title": { "type": "string", "maxLength": 150 },
-        "company": { "type": "string", "maxLength": 150 },
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "company": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "companyLogo": { "type": "string", "maxLength": 1000 },
         "category": { "type": "string", "maxLength": 100 },
-        "jobType": { "type": "string", "maxLength": 50 },
-        "workMode": { "type": "string", "maxLength": 50 },
-        "location": { "type": "string", "maxLength": 150 },
+        "jobType": { "type": "string", "maxLength": 60 },
+        "workMode": { "type": "string", "maxLength": 60 },
+        "location": { "type": "string", "maxLength": 200 },
         "salaryMin": { "type": "number" },
         "salaryMax": { "type": "number" },
         "salaryPeriod": { "type": "string", "maxLength": 50 },
-        "description": { "type": "string", "maxLength": 5000 },
-        "contactEmail": { "type": "string", "maxLength": 150 },
-        "contactPhone": { "type": "string", "maxLength": 25 },
+        "experienceMin": { "type": "number" },
+        "experienceMax": { "type": "number" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "responsibilities": { "type": "array" },
+        "requirements": { "type": "array" },
+        "skills": { "type": "array" },
+        "perks": { "type": "array" },
+        "contactEmail": { "type": "string", "maxLength": 160 },
+        "contactPhone": { "type": "string", "maxLength": 30 },
+        "postedBy": { "type": "string", "maxLength": 150 },
+        "postedDate": { "type": "string", "maxLength": 64 },
+        "deadline": { "type": "string", "maxLength": 64 },
+        "views": { "type": "number" },
+        "applicantsCount": { "type": "number" },
+        "imageUrl": { "type": "string", "maxLength": 800000 },
+        "isUrgent": { "type": "boolean" },
+        "isFeatured": { "type": "boolean" },
+        "isGovtOutsourced": { "type": "boolean" },
+        "isVerifiedWFH": { "type": "boolean" },
         "status": { "type": "string", "enum": ["Active", "Closed"] },
-        "postedDate": { "type": "string" }
+        "isDeleted": { "type": "boolean" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "title", "company", "description", "status"]
     },
@@ -42,50 +61,97 @@
       "description": "Candidate application submitted for a job opening",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "jobId": { "type": "string" },
-        "jobTitle": { "type": "string", "maxLength": 150 },
-        "applicantName": { "type": "string", "maxLength": 100 },
-        "applicantEmail": { "type": "string", "maxLength": 150 },
-        "applicantPhone": { "type": "string", "maxLength": 25 },
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "jobId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "jobTitle": { "type": "string", "maxLength": 200 },
+        "company": { "type": "string", "maxLength": 200 },
+        "fullName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "phone": { "type": "string", "minLength": 5, "maxLength": 30 },
+        "currentCity": { "type": "string", "maxLength": 120 },
+        "totalExperience": { "type": "string", "maxLength": 60 },
+        "currentCTC": { "type": "string", "maxLength": 60 },
+        "expectedCTC": { "type": "string", "maxLength": 60 },
+        "noticePeriod": { "type": "string", "maxLength": 60 },
+        "resumeUrlOrSummary": { "type": "string", "maxLength": 5000 },
+        "coverNote": { "type": "string", "maxLength": 3000 },
+        "appliedDate": { "type": "string", "maxLength": 64 },
         "status": { "type": "string", "enum": ["Submitted", "Under Review", "Shortlisted", "Interview Scheduled", "Selected", "Rejected"] },
-        "appliedDate": { "type": "string" }
+        "applicantUid": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
       },
-      "required": ["id", "jobId", "applicantName", "applicantEmail", "status"]
+      "required": ["id", "jobId", "fullName", "email", "phone", "status"]
     },
     "Certificate": {
       "title": "Certificate",
-      "description": "Issued skill / placement completion certificate",
+      "description": "Issued or requested skill and placement completion certificate",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "certificateNumber": { "type": "string", "maxLength": 100 },
-        "candidateName": { "type": "string", "maxLength": 100 },
-        "candidateEmail": { "type": "string", "maxLength": 150 },
-        "certificateType": { "type": "string", "maxLength": 100 },
-        "courseOrRole": { "type": "string", "maxLength": 200 },
-        "duration": { "type": "string", "maxLength": 100 },
-        "status": { "type": "string", "enum": ["Pending Approval", "Approved", "Rejected"] }
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "certificateNumber": { "type": "string", "minLength": 4, "maxLength": 100 },
+        "candidateName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "fatherName": { "type": "string", "maxLength": 120 },
+        "candidateEmail": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "candidatePhone": { "type": "string", "maxLength": 30 },
+        "certificateType": { "type": "string", "maxLength": 120 },
+        "courseOrRole": { "type": "string", "minLength": 1, "maxLength": 250 },
+        "duration": { "type": "string", "maxLength": 120 },
+        "issueDate": { "type": "string", "maxLength": 80 },
+        "grade": { "type": "string", "maxLength": 100 },
+        "organization": { "type": "string", "maxLength": 200 },
+        "requestedDate": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["Pending Approval", "Approved", "Rejected"] },
+        "rejectionReason": { "type": "string", "maxLength": 500 },
+        "adminRemarks": { "type": "string", "maxLength": 1000 },
+        "approvedBy": { "type": "string", "maxLength": 150 },
+        "approvedDate": { "type": "string", "maxLength": 64 },
+        "signatoryTitle": { "type": "string", "maxLength": 150 },
+        "isDeleted": { "type": "boolean" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "certificateNumber", "candidateName", "candidateEmail", "status"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Website CMS and announcement configuration controlled by admins",
+      "type": "object",
+      "properties": {
+        "portalName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "tagline": { "type": "string", "maxLength": 250 },
+        "announcementNotice": { "type": "string", "maxLength": 1000 },
+        "announcementEnabled": { "type": "boolean" },
+        "helplinePhone": { "type": "string", "maxLength": 30 },
+        "secondaryPhone": { "type": "string", "maxLength": 30 },
+        "supportEmail": { "type": "string", "maxLength": 160 },
+        "officeAddress": { "type": "string", "maxLength": 500 },
+        "whatsappNumber": { "type": "string", "maxLength": 30 },
+        "whatsappMessage": { "type": "string", "maxLength": 500 },
+        "aboutUsText": { "type": "string", "maxLength": 5000 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["portalName", "announcementEnabled", "helplinePhone", "supportEmail"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "User",
-      "description": "Registered users directory"
+      "description": "Registered users directory (PII isolated to owner and admin)"
     },
     "/jobs/{jobId}": {
       "schema": "Job",
-      "description": "Job vacancies listing"
+      "description": "Public job vacancies listing managed by admins"
     },
     "/applications/{applicationId}": {
       "schema": "Application",
-      "description": "Candidate applications"
+      "description": "Candidate job applications"
     },
     "/certificates/{certificateId}": {
       "schema": "Certificate",
-      "description": "Certificates repository"
+      "description": "Certificates verification and approval repository"
+    },
+    "/site_settings/{settingId}": {
+      "schema": "SiteSettings",
+      "description": "Public website CMS settings updated by admins"
     }
   }
 }

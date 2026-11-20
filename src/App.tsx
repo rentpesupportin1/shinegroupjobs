@@ -14,14 +14,33 @@ import { PostJobModal } from './components/PostJobModal.js';
 import { AIResumeMatcherModal } from './components/AIResumeMatcherModal.js';
 import { AuthModal } from './components/AuthModal.js';
 import { Job, JobApplication, User, WebsiteSettings } from './types.js';
-import { initialJobs, initialApplications } from './data/initialJobs.js';
+import { INITIAL_JOBS, initialJobs, initialApplications } from './data/initialJobs.js';
 import { 
   getStoredJobs, 
   getStoredApplications, 
   getStoredSettings, 
+  saveStoredSettings,
   deleteLocalJob 
 } from './utils/localPersistence.js';
-import { db, collection, getDocs } from './firebase.js';
+import {
+  db,
+  auth,
+  signOut,
+  onAuthStateChanged,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  query,
+  where,
+  onSnapshot,
+  isFirebaseAdminSession,
+  sanitizeJobForFirestore,
+  handleFirestoreError,
+  OperationType
+} from './firebase.js';
 import { MessageCircle, Bell } from 'lucide-react';
 
 const defaultSettings: WebsiteSettings = {
@@ -114,32 +133,101 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Fetch initial jobs from backend API or local storage
+  // Helper: Build canonical job list from Cloud Firestore (+ optional API/seed) and wipe legacy per-browser overrides
+  const applyCloudJobsSnapshot = (
+    snap: { forEach: (cb: (docSnap: { id: string; data: () => any }) => void) => void },
+    apiJobs: Job[] | null = null
+  ) => {
+    const deletedInFirestore = new Set<string>();
+    const firestoreJobs: Job[] = [];
+
+    snap.forEach((d) => {
+      const data = d.data() as Job & { isDeleted?: boolean };
+      const docId = data.id || d.id;
+      if (data.isDeleted) {
+        deletedInFirestore.add(docId);
+      } else {
+        firestoreJobs.push({ ...data, id: docId });
+      }
+    });
+
+    const mergedMap = new Map<string, Job>();
+    for (const seedJob of INITIAL_JOBS) {
+      mergedMap.set(seedJob.id, seedJob);
+    }
+    if (apiJobs) {
+      for (const aj of apiJobs) {
+        mergedMap.set(aj.id, aj);
+      }
+    }
+    for (const fj of firestoreJobs) {
+      mergedMap.set(fj.id, fj);
+    }
+
+    const activeJobs = Array.from(mergedMap.values())
+      .filter((j) => !deletedInFirestore.has(j.id))
+      .sort((a, b) => {
+        const aIsSeed = INITIAL_JOBS.some((ij) => ij.id === a.id);
+        const bIsSeed = INITIAL_JOBS.some((ij) => ij.id === b.id);
+        if (aIsSeed !== bIsSeed) return aIsSeed ? 1 : -1;
+        const aTime = Date.parse((a as any).updatedAt || a.postedDate || '') || 0;
+        const bTime = Date.parse((b as any).updatedAt || b.postedDate || '') || 0;
+        return bTime - aTime;
+      });
+
+    // Clear stale per-browser localStorage overrides so different Chrome profiles never drift out of sync
+    try {
+      localStorage.setItem('shine_deleted_job_ids', JSON.stringify(Array.from(deletedInFirestore)));
+      localStorage.setItem('shine_custom_jobs', JSON.stringify(firestoreJobs));
+      localStorage.removeItem('shine_job_status_overrides');
+    } catch {
+      // ignore storage quota errors
+    }
+
+    setJobs(activeJobs);
+  };
+
+  // Fetch jobs from backend API + Cloud Firestore (permanent cross-device source of truth on Netlify)
   const fetchJobs = async () => {
     setLoading(true);
+    let apiJobs: Job[] | null = null;
     try {
       const res = await fetch('/api/jobs');
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.jobs && Array.isArray(data.jobs)) {
-          const deletedRaw = localStorage.getItem('shine_deleted_job_ids');
-          const deletedIds: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
-          const activeJobs = data.jobs.filter((j: Job) => !deletedIds.includes(j.id));
-          setJobs(activeJobs);
-          return;
+          apiJobs = data.jobs;
         }
       }
     } catch (err) {
-      console.warn('Could not fetch from backend API, using local storage state:', err);
+      console.warn('Could not fetch from backend API, syncing via Cloud Firestore:', err);
+    }
+
+    const deletedRaw = localStorage.getItem('shine_deleted_job_ids');
+    const localDeletedIds: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+
+    try {
+      const snap = await getDocs(collection(db, 'jobs'));
+      applyCloudJobsSnapshot(snap, apiJobs);
+      setLoading(false);
+      return;
+    } catch (fsErr) {
+      console.warn('Firestore jobs lookup notice, falling back to API/local state:', fsErr);
     } finally {
       setLoading(false);
     }
-    // Static / Netlify fallback
+
+    if (apiJobs) {
+      setJobs(apiJobs.filter((j: Job) => !localDeletedIds.includes(j.id)));
+      return;
+    }
+
+    // Offline fallback
     setJobs(getStoredJobs());
   };
 
-  // Fetch applications from backend API or local storage
+  // Fetch applications from backend API or authorized Cloud Firestore scope
   const fetchApplications = async () => {
     try {
       const res = await fetch('/api/applications');
@@ -152,50 +240,94 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.warn('Could not fetch applications, using local storage state:', err);
+      console.warn('Could not fetch applications from API, using Cloud Firestore/local state:', err);
     }
-    // Static / Netlify Cloud Firestore fallback
-    try {
-      const snap = await getDocs(collection(db, 'applications'));
-      if (!snap.empty) {
+
+    // Only query Firestore applications if signed into Firebase Auth (enforces PII isolation rules)
+    const fbUser = auth.currentUser;
+    if (fbUser) {
+      try {
         const firestoreApps: JobApplication[] = [];
-        snap.forEach(d => {
-          firestoreApps.push(d.data() as JobApplication);
-        });
+        if (isFirebaseAdminSession()) {
+          const snap = await getDocs(collection(db, 'applications'));
+          snap.forEach((d) => {
+            firestoreApps.push({ ...(d.data() as JobApplication), id: (d.data() as any).id || d.id });
+          });
+        } else {
+          const uidSnap = await getDocs(
+            query(collection(db, 'applications'), where('applicantUid', '==', fbUser.uid))
+          );
+          uidSnap.forEach((d) => {
+            firestoreApps.push({ ...(d.data() as JobApplication), id: (d.data() as any).id || d.id });
+          });
+
+          if (fbUser.emailVerified && fbUser.email) {
+            try {
+              const emailSnap = await getDocs(
+                query(collection(db, 'applications'), where('email', '==', fbUser.email.toLowerCase()))
+              );
+              emailSnap.forEach((d) => {
+                const appObj = { ...(d.data() as JobApplication), id: (d.data() as any).id || d.id };
+                if (!firestoreApps.some((a) => a.id === appObj.id)) {
+                  firestoreApps.push(appObj);
+                }
+              });
+            } catch {
+              // Token email casing may differ; applicantUid query already succeeded
+            }
+          }
+        }
 
         const localApps = getStoredApplications();
         const merged = [...firestoreApps];
         for (const la of localApps) {
-          if (!merged.some(m => m.id === la.id)) {
+          if (!merged.some((m) => m.id === la.id)) {
             merged.push(la);
           }
         }
         setApplications(merged);
         return;
+      } catch (fsErr) {
+        console.warn('Firestore applications lookup notice:', fsErr);
       }
-    } catch (fsErr) {
-      console.warn('Firestore applications lookup notice:', fsErr);
     }
 
     setApplications(getStoredApplications());
   };
 
-  // Fetch website CMS settings
+  // Fetch website CMS settings from API + Cloud Firestore
   const fetchSettings = async () => {
+    let apiSettings: WebsiteSettings | null = null;
     try {
       const res = await fetch('/api/site-settings');
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.settings) {
-          setWebsiteSettings(data.settings);
-          return;
+          apiSettings = data.settings;
         }
       }
     } catch (err) {
-      console.warn('Could not fetch site settings:', err);
+      console.warn('Could not fetch site settings from API:', err);
     }
-    // Static / Netlify fallback
+
+    try {
+      const snap = await getDoc(doc(db, 'site_settings', 'main'));
+      if (snap.exists()) {
+        const cloudSettings = { ...defaultSettings, ...(snap.data() as Partial<WebsiteSettings>) };
+        setWebsiteSettings(cloudSettings);
+        saveStoredSettings(cloudSettings);
+        return;
+      }
+    } catch (fsErr) {
+      console.warn('Firestore site settings lookup notice:', fsErr);
+    }
+
+    if (apiSettings) {
+      setWebsiteSettings(apiSettings);
+      return;
+    }
+
     setWebsiteSettings(getStoredSettings());
   };
 
@@ -203,6 +335,41 @@ export default function App() {
     fetchJobs();
     fetchApplications();
     fetchSettings();
+
+    // Real-time Cloud Firestore listeners: keep every Chrome profile & device in sync automatically
+    const unsubscribeJobs = onSnapshot(
+      collection(db, 'jobs'),
+      (snap) => {
+        applyCloudJobsSnapshot(snap);
+      },
+      (err) => {
+        console.warn('Realtime jobs listener notice:', err);
+      }
+    );
+
+    const unsubscribeSettings = onSnapshot(
+      doc(db, 'site_settings', 'main'),
+      (snap) => {
+        if (snap.exists()) {
+          const cloudSettings = { ...defaultSettings, ...(snap.data() as Partial<WebsiteSettings>) };
+          setWebsiteSettings(cloudSettings);
+          saveStoredSettings(cloudSettings);
+        }
+      },
+      (err) => {
+        console.warn('Realtime settings listener notice:', err);
+      }
+    );
+
+    const unsubscribeAuth = onAuthStateChanged(auth, () => {
+      fetchApplications();
+    });
+
+    return () => {
+      unsubscribeJobs();
+      unsubscribeSettings();
+      unsubscribeAuth();
+    };
   }, []);
 
   // Save bookmarked IDs to localStorage
@@ -242,6 +409,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    signOut(auth).catch(() => {});
     setCurrentUser(null);
     setMyApplicationIds([]);
     try {
@@ -360,7 +528,7 @@ export default function App() {
 
   // Handle new job posted callback
   const handleJobPosted = (newJob: Job) => {
-    setJobs(prev => [newJob, ...prev]);
+    setJobs(prev => [newJob, ...prev.filter(j => j.id !== newJob.id)]);
     setActiveTab('posted-jobs');
   };
 
@@ -372,12 +540,36 @@ export default function App() {
       return;
     }
 
+    const targetJob = jobs.find(j => j.id === jobId);
+
     // 1. Immediately update UI and local persistence
     deleteLocalJob(jobId);
     setJobs(prev => prev.filter(j => j.id !== jobId));
     setSelectedJobForDetail(prev => (prev?.id === jobId ? null : prev));
 
-    // 2. Synchronize with backend API
+    // 2. Synchronize deletion permanently in Cloud Firestore
+    if (isFirebaseAdminSession()) {
+      const isSeedJob = INITIAL_JOBS.some(ij => ij.id === jobId);
+      try {
+        if (isSeedJob) {
+          await setDoc(
+            doc(db, 'jobs', jobId),
+            sanitizeJobForFirestore({ ...(targetJob || { id: jobId }), isDeleted: true }),
+            { merge: true }
+          );
+        } else {
+          await deleteDoc(doc(db, 'jobs', jobId));
+        }
+      } catch (fsErr) {
+        try {
+          handleFirestoreError(fsErr, OperationType.DELETE, `jobs/${jobId}`);
+        } catch (err) {
+          console.error('Firestore job delete failed:', err);
+        }
+      }
+    }
+
+    // 3. Synchronize with backend API (if running full-stack server)
     try {
       await fetch(`/api/jobs/${jobId}`, {
         method: 'DELETE',
@@ -387,7 +579,7 @@ export default function App() {
         }
       });
     } catch (e) {
-      console.warn('Backend DELETE error, using local fallback:', e);
+      console.warn('Backend DELETE error, using Cloud/local state:', e);
     }
   };
 

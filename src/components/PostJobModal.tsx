@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Sparkles, 
@@ -16,10 +16,28 @@ import {
   Laptop,
   Image as ImageIcon,
   UploadCloud,
-  FileImage
+  FileImage,
+  Cloud
 } from 'lucide-react';
 import { Job, User } from '../types.js';
 import { saveLocalCustomJob } from '../utils/localPersistence.js';
+import {
+  db,
+  auth,
+  googleProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  doc,
+  setDoc,
+  isFirebaseAdminSession,
+  isAuthorizedAdminEmail,
+  formatFirebaseAuthError,
+  compressImageDataUrl,
+  sanitizeJobForFirestore,
+  handleFirestoreError,
+  OperationType
+} from '../firebase.js';
 
 interface PostJobModalProps {
   isOpen: boolean;
@@ -67,10 +85,48 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
 
   const [aiLoading, setAiLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [isCloudAdminReady, setIsCloudAdminReady] = useState(() => isFirebaseAdminSession());
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Handle Image File Upload (Max 50MB)
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, () => {
+      setIsCloudAdminReady(isFirebaseAdminSession());
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsCloudAdminReady(isFirebaseAdminSession());
+      setErrorMsg('');
+      setSuccessMsg('');
+    }
+  }, [isOpen]);
+
+  const handleConnectGoogleAdmin = async () => {
+    setGoogleConnecting(true);
+    setErrorMsg('');
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const email = (result.user.email || '').toLowerCase().trim();
+      if (!isAuthorizedAdminEmail(email) || !result.user.emailVerified) {
+        await signOut(auth).catch(() => {});
+        setErrorMsg(`Account "${email}" is not an authorized Admin. Please sign in with rentpe.support.in@gmail.com.`);
+        return;
+      }
+      setIsCloudAdminReady(true);
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setErrorMsg(formatFirebaseAuthError(err));
+      }
+    } finally {
+      setGoogleConnecting(false);
+    }
+  };
+
+  // Handle Image File Upload (Max 50MB, auto-compressed for Cloud Firestore persistence)
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setImageError(null);
     const file = e.target.files?.[0];
@@ -89,9 +145,15 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
 
     setImageLoading(true);
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const result = reader.result as string;
-      setFormData(prev => ({ ...prev, imageUrl: result }));
+      const optimized = await compressImageDataUrl(result, 550000);
+      if (!optimized && result.length > 780000) {
+        setImageError('Image could not be compressed below 780 KB for cloud storage. Please choose a smaller image.');
+        setImageLoading(false);
+        return;
+      }
+      setFormData(prev => ({ ...prev, imageUrl: optimized || result }));
       setImageMeta({ name: file.name, size: file.size });
       setImageLoading(false);
     };
@@ -219,15 +281,30 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
         .map(s => s.trim())
         .filter(Boolean);
 
+      const optimizedImage = formData.imageUrl
+        ? await compressImageDataUrl(formData.imageUrl, 550000)
+        : '';
+
+      const generatedId = 'job-' + Date.now();
       const payload = {
         ...formData,
+        id: generatedId,
+        imageUrl: optimizedImage || undefined,
         responsibilities,
         requirements,
         skills: skills.length > 0 ? skills : ['General Skills', 'Communication'],
-        perks: perks.length > 0 ? perks : ['Performance Bonus', 'PF & ESI']
+        perks: perks.length > 0 ? perks : ['Performance Bonus', 'PF & ESI'],
+        postedDate: new Date().toISOString().split('T')[0],
+        views: 1,
+        applicantsCount: 0,
+        isFeatured: true,
+        isGovtOutsourced: Boolean(formData.isGovtOutsourced || formData.category === 'Govt Outsourced'),
+        isVerifiedWFH: Boolean(formData.isVerifiedWFH || formData.workMode === 'Remote / WFH'),
+        status: 'Active' as const
       };
 
       let postedJob: Job | null = null;
+      let apiSaved = false;
 
       try {
         const res = await fetch('/api/jobs', {
@@ -245,31 +322,55 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
           const data = await res.json();
           if (data.success && data.job) {
             postedJob = data.job;
+            apiSaved = true;
           }
         }
       } catch (networkErr) {
-        console.warn('Backend server not reachable for job post, saving locally:', networkErr);
+        console.warn('Backend server not reachable for job post, syncing via Cloud Firestore:', networkErr);
       }
 
-      // Netlify static fallback: save job to localStorage
       if (!postedJob) {
-        postedJob = saveLocalCustomJob(payload);
+        postedJob = {
+          ...payload,
+          id: generatedId
+        } as Job;
       }
 
-      setSuccessMsg('Job posted successfully! It is now live on Shine Group Jobs portal.');
+      // Permanent Cloud Firestore persistence (essential for Netlify cross-device persistence)
+      if (!isFirebaseAdminSession()) {
+        if (!apiSaved) {
+          setErrorMsg(
+            'Cloud Database connection required: Please click "Connect Google Admin (rentpe.support.in@gmail.com)" below so your job post saves permanently on Netlify and does not disappear.'
+          );
+          setSubmitting(false);
+          return;
+        }
+      } else {
+        const firestorePayload = sanitizeJobForFirestore(postedJob);
+        try {
+          await setDoc(doc(db, 'jobs', postedJob.id), firestorePayload);
+        } catch (fsErr) {
+          try {
+            handleFirestoreError(fsErr, OperationType.CREATE, `jobs/${postedJob.id}`);
+          } catch (structuredErr: any) {
+            setErrorMsg(
+              `Could not save job to Cloud Database (${structuredErr?.message || 'Permission denied'}). Please reconnect Google Admin (rentpe.support.in@gmail.com) and try again.`
+            );
+            setSubmitting(false);
+            return;
+          }
+        }
+      }
+
+      saveLocalCustomJob(postedJob);
+      setSuccessMsg('Job posted permanently to Cloud Database! It is now live for all visitors across all devices.');
       onJobPosted(postedJob);
       setTimeout(() => {
         onClose();
       }, 1000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error posting job:', err);
-      // Even on error, fallback to local save
-      const fallbackJob = saveLocalCustomJob(formData);
-      setSuccessMsg('Job posted successfully (saved to browser)!');
-      onJobPosted(fallbackJob);
-      setTimeout(() => {
-        onClose();
-      }, 1000);
+      setErrorMsg(err?.message || 'Failed to publish job. Please check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
@@ -305,7 +406,7 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-300">
-                Verified publishing on Shine Group Jobs portal with Gemini AI job spec generation
+                Permanent Cloud Database publishing on Shine Group Jobs portal
               </p>
             </div>
           </div>
@@ -319,6 +420,35 @@ export const PostJobModal: React.FC<PostJobModalProps> = ({
 
         {/* Scrollable Form */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 text-sm">
+
+          {!isCloudAdminReady && (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <Cloud className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block font-bold text-amber-950">
+                    Connect Google Admin for Permanent Cloud Saving
+                  </strong>
+                  <p className="text-amber-800 mt-0.5 leading-relaxed">
+                    Sign in with <strong>rentpe.support.in@gmail.com</strong> so posted jobs save permanently in Cloud Database and stay visible for all users on Netlify.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleConnectGoogleAdmin}
+                disabled={googleConnecting}
+                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shrink-0 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                {googleConnecting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                )}
+                <span>Connect Google Admin</span>
+              </button>
+            </div>
+          )}
           
           {errorMsg && (
             <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">

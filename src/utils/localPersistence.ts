@@ -267,7 +267,7 @@ export function getStoredJobs(): Job[] {
 
 export function saveLocalCustomJob(jobData: Partial<Job>): Job {
   const newJob: Job = {
-    id: "job-" + Date.now(),
+    id: jobData.id || "job-" + Date.now(),
     title: jobData.title || "Job Opening",
     company: jobData.company || "Hiring Partner",
     category: jobData.category || "IT & Software",
@@ -287,22 +287,23 @@ export function saveLocalCustomJob(jobData: Partial<Job>): Job {
     contactEmail: jobData.contactEmail || "admin@shinegroupjob.com",
     contactPhone: jobData.contactPhone || "+91 9039881102",
     postedBy: jobData.postedBy || "Shine Admin Desk",
-    postedDate: new Date().toISOString().split('T')[0],
+    postedDate: jobData.postedDate || new Date().toISOString().split('T')[0],
     deadline: jobData.deadline || "",
-    views: 12,
-    applicantsCount: 0,
+    views: jobData.views ?? 12,
+    applicantsCount: jobData.applicantsCount ?? 0,
     imageUrl: jobData.imageUrl,
     isUrgent: !!jobData.isUrgent,
     isFeatured: !!jobData.isFeatured,
     isGovtOutsourced: !!jobData.isGovtOutsourced,
     isVerifiedWFH: !!jobData.isVerifiedWFH,
-    status: "Active"
+    status: jobData.status || "Active"
   };
 
   try {
     const raw = localStorage.getItem('shine_custom_jobs');
     const list: Job[] = raw ? JSON.parse(raw) : [];
-    localStorage.setItem('shine_custom_jobs', JSON.stringify([newJob, ...list]));
+    const filtered = list.filter(j => j.id !== newJob.id);
+    localStorage.setItem('shine_custom_jobs', JSON.stringify([newJob, ...filtered]));
   } catch (e) {
     console.error('Error saving local job:', e);
   }
@@ -344,6 +345,11 @@ export function deleteLocalJob(jobId: string): void {
     if (!list.includes(jobId)) {
       list.push(jobId);
       localStorage.setItem('shine_deleted_job_ids', JSON.stringify(list));
+    }
+    const customRaw = localStorage.getItem('shine_custom_jobs');
+    if (customRaw) {
+      const customList: Job[] = JSON.parse(customRaw);
+      localStorage.setItem('shine_custom_jobs', JSON.stringify(customList.filter(j => j.id !== jobId)));
     }
   } catch (e) {
     console.error('Error deleting local job:', e);

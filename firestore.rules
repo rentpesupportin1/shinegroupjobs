@@ -1,14 +1,31 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     // Global Safety Net: default-deny catch-all
     match /{document=**} {
       allow read, write: if false;
     }
 
+    // ---------------- GLOBAL PRIMITIVES ---------------- //
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    function isVerifiedEmail() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function isOwner(userId) {
@@ -16,45 +33,240 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == "admin@shinegroupjobs.com" ||
-        request.auth.token.email == "admin@shinegroupjob.com" ||
-        request.auth.token.email == "rentpe.support.in@gmail.com"
+      return isVerifiedEmail() && request.auth.token.email in [
+        'rentpe.support.in@gmail.com',
+        'admin@shinegroupjobs.com',
+        'admin@shinegroupjob.com'
+      ];
+    }
+
+    function isOptionalString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isOptionalBool(data, field) {
+      return !(field in data) || data[field] is bool;
+    }
+
+    function isOptionalNumber(data, field) {
+      return !(field in data) || data[field] is number;
+    }
+
+    function isOptionalStringList(data, field, maxItems) {
+      return !(field in data) || (
+        data[field] is list &&
+        data[field].size() <= maxItems &&
+        (data[field].size() == 0 || data[field][0] is string)
       );
     }
 
-    // 1. Users Collection
+    // ---------------- VALIDATION BLUEPRINTS ---------------- //
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'name', 'email', 'role']) &&
+        data.keys().hasOnly(['id', 'name', 'email', 'role', 'phone', 'createdAt', 'lastLoginAt']) &&
+        isValidId(data.id) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.role in ['job_seeker', 'admin'] &&
+        isOptionalString(data, 'phone', 30) &&
+        isOptionalString(data, 'createdAt', 64) &&
+        isOptionalString(data, 'lastLoginAt', 64);
+    }
+
+    function isValidJob(data) {
+      return data.keys().hasAll(['id', 'title', 'company', 'description', 'status']) &&
+        data.keys().hasOnly([
+          'id', 'title', 'company', 'companyLogo', 'category', 'jobType', 'workMode',
+          'location', 'salaryMin', 'salaryMax', 'salaryPeriod', 'experienceMin', 'experienceMax',
+          'description', 'responsibilities', 'requirements', 'skills', 'perks',
+          'contactEmail', 'contactPhone', 'postedBy', 'postedDate', 'deadline',
+          'views', 'applicantsCount', 'imageUrl', 'isUrgent', 'isFeatured',
+          'isGovtOutsourced', 'isVerifiedWFH', 'status', 'isDeleted', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.company is string && data.company.size() >= 1 && data.company.size() <= 200 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 8000 &&
+        data.status in ['Active', 'Closed'] &&
+        isOptionalString(data, 'companyLogo', 1000) &&
+        isOptionalString(data, 'category', 100) &&
+        isOptionalString(data, 'jobType', 60) &&
+        isOptionalString(data, 'workMode', 60) &&
+        isOptionalString(data, 'location', 200) &&
+        isOptionalNumber(data, 'salaryMin') &&
+        isOptionalNumber(data, 'salaryMax') &&
+        isOptionalString(data, 'salaryPeriod', 50) &&
+        isOptionalNumber(data, 'experienceMin') &&
+        isOptionalNumber(data, 'experienceMax') &&
+        isOptionalStringList(data, 'responsibilities', 30) &&
+        isOptionalStringList(data, 'requirements', 30) &&
+        isOptionalStringList(data, 'skills', 40) &&
+        isOptionalStringList(data, 'perks', 30) &&
+        isOptionalString(data, 'contactEmail', 160) &&
+        isOptionalString(data, 'contactPhone', 30) &&
+        isOptionalString(data, 'postedBy', 150) &&
+        isOptionalString(data, 'postedDate', 64) &&
+        isOptionalString(data, 'deadline', 64) &&
+        isOptionalNumber(data, 'views') &&
+        isOptionalNumber(data, 'applicantsCount') &&
+        isOptionalString(data, 'imageUrl', 800000) &&
+        isOptionalBool(data, 'isUrgent') &&
+        isOptionalBool(data, 'isFeatured') &&
+        isOptionalBool(data, 'isGovtOutsourced') &&
+        isOptionalBool(data, 'isVerifiedWFH') &&
+        isOptionalBool(data, 'isDeleted') &&
+        isOptionalString(data, 'updatedAt', 64);
+    }
+
+    function isValidApplication(data) {
+      return data.keys().hasAll(['id', 'jobId', 'fullName', 'email', 'phone', 'status']) &&
+        data.keys().hasOnly([
+          'id', 'jobId', 'jobTitle', 'company', 'fullName', 'email', 'phone',
+          'currentCity', 'totalExperience', 'currentCTC', 'expectedCTC', 'noticePeriod',
+          'resumeUrlOrSummary', 'coverNote', 'appliedDate', 'status', 'applicantUid', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.jobId) &&
+        data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.phone is string && data.phone.size() >= 5 && data.phone.size() <= 30 &&
+        data.status in ['Submitted', 'Under Review', 'Shortlisted', 'Interview Scheduled', 'Selected', 'Rejected'] &&
+        isOptionalString(data, 'jobTitle', 200) &&
+        isOptionalString(data, 'company', 200) &&
+        isOptionalString(data, 'currentCity', 120) &&
+        isOptionalString(data, 'totalExperience', 60) &&
+        isOptionalString(data, 'currentCTC', 60) &&
+        isOptionalString(data, 'expectedCTC', 60) &&
+        isOptionalString(data, 'noticePeriod', 60) &&
+        isOptionalString(data, 'resumeUrlOrSummary', 5000) &&
+        isOptionalString(data, 'coverNote', 3000) &&
+        isOptionalString(data, 'appliedDate', 64) &&
+        isOptionalString(data, 'applicantUid', 128) &&
+        isOptionalString(data, 'updatedAt', 64);
+    }
+
+    function isValidCertificate(data) {
+      return data.keys().hasAll(['id', 'certificateNumber', 'candidateName', 'candidateEmail', 'status']) &&
+        data.keys().hasOnly([
+          'id', 'certificateNumber', 'candidateName', 'fatherName', 'candidateEmail', 'candidatePhone',
+          'certificateType', 'courseOrRole', 'duration', 'issueDate', 'grade', 'organization',
+          'requestedDate', 'status', 'rejectionReason', 'adminRemarks', 'approvedBy',
+          'approvedDate', 'signatoryTitle', 'isDeleted', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        data.certificateNumber is string && data.certificateNumber.size() >= 4 && data.certificateNumber.size() <= 100 &&
+        data.candidateName is string && data.candidateName.size() >= 1 && data.candidateName.size() <= 120 &&
+        data.candidateEmail is string && data.candidateEmail.size() >= 3 && data.candidateEmail.size() <= 160 &&
+        data.status in ['Pending Approval', 'Approved', 'Rejected'] &&
+        isOptionalString(data, 'fatherName', 120) &&
+        isOptionalString(data, 'candidatePhone', 30) &&
+        isOptionalString(data, 'certificateType', 120) &&
+        isOptionalString(data, 'courseOrRole', 250) &&
+        isOptionalString(data, 'duration', 120) &&
+        isOptionalString(data, 'issueDate', 80) &&
+        isOptionalString(data, 'grade', 100) &&
+        isOptionalString(data, 'organization', 200) &&
+        isOptionalString(data, 'requestedDate', 64) &&
+        isOptionalString(data, 'rejectionReason', 500) &&
+        isOptionalString(data, 'adminRemarks', 1000) &&
+        isOptionalString(data, 'approvedBy', 150) &&
+        isOptionalString(data, 'approvedDate', 64) &&
+        isOptionalString(data, 'signatoryTitle', 150) &&
+        isOptionalBool(data, 'isDeleted') &&
+        isOptionalString(data, 'updatedAt', 64);
+    }
+
+    function isValidSiteSettings(data) {
+      return data.keys().hasAll(['portalName', 'announcementEnabled', 'helplinePhone', 'supportEmail']) &&
+        data.keys().hasOnly([
+          'portalName', 'tagline', 'announcementNotice', 'announcementEnabled',
+          'helplinePhone', 'secondaryPhone', 'supportEmail', 'officeAddress',
+          'whatsappNumber', 'whatsappMessage', 'aboutUsText', 'updatedAt'
+        ]) &&
+        data.portalName is string && data.portalName.size() >= 1 && data.portalName.size() <= 120 &&
+        data.announcementEnabled is bool &&
+        data.helplinePhone is string && data.helplinePhone.size() >= 3 && data.helplinePhone.size() <= 30 &&
+        data.supportEmail is string && data.supportEmail.size() >= 3 && data.supportEmail.size() <= 160 &&
+        isOptionalString(data, 'tagline', 250) &&
+        isOptionalString(data, 'announcementNotice', 1000) &&
+        isOptionalString(data, 'secondaryPhone', 30) &&
+        isOptionalString(data, 'officeAddress', 500) &&
+        isOptionalString(data, 'whatsappNumber', 30) &&
+        isOptionalString(data, 'whatsappMessage', 500) &&
+        isOptionalString(data, 'aboutUsText', 5000) &&
+        isOptionalString(data, 'updatedAt', 64);
+    }
+
+    // ---------------- COLLECTIONS ---------------- //
+
+    // 1. Users Collection (PII isolated)
     match /users/{userId} {
-      allow read: if isOwner(userId) || isAdmin();
-      allow create: if isSignedIn() && (isOwner(userId) || isAdmin());
-      allow update: if isOwner(userId) || isAdmin();
-      allow delete: if isAdmin();
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin() || (isSignedIn() && existing().id == request.auth.uid);
+      allow create: if isValidId(userId) && isVerifiedEmail() && isValidUser(incoming()) && (
+        isAdmin() ||
+        (isOwner(userId) && incoming().id == request.auth.uid && incoming().role == 'job_seeker')
+      );
+      allow update: if isValidId(userId) && isVerifiedEmail() && isValidUser(incoming()) && (
+        isAdmin() ||
+        (
+          isOwner(userId) &&
+          incoming().id == existing().id &&
+          incoming().role == existing().role &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'email', 'phone', 'lastLoginAt'])
+        )
+      );
+      allow delete: if isValidId(userId) && isAdmin();
     }
 
-    // 2. Jobs Collection
+    // 2. Jobs Collection (Public listings, strictly Admin-managed mutations)
     match /jobs/{jobId} {
-      allow read: if true; // Public job listings
-      allow create, update, delete: if isAdmin() || isSignedIn();
+      allow get: if isValidId(jobId);
+      allow list: if true;
+      allow create: if isValidId(jobId) && isAdmin() && isValidJob(incoming()) && incoming().id == jobId;
+      allow update: if isValidId(jobId) && isAdmin() && isValidJob(incoming()) && incoming().id == existing().id;
+      allow delete: if isValidId(jobId) && isAdmin();
     }
 
-    // 3. Applications Collection
+    // 3. Applications Collection (Candidate PII protected)
     match /applications/{applicationId} {
-      allow read: if isAdmin() || (isSignedIn() && resource.data.applicantEmail == request.auth.token.email);
-      allow create: if true; // Candidates can apply
-      allow update, delete: if isAdmin();
+      allow get: if isValidId(applicationId) && (
+        isAdmin() ||
+        (isVerifiedEmail() && (existing().email == request.auth.token.email || existing().applicantUid == request.auth.uid))
+      );
+      allow list: if isAdmin() || (
+        isVerifiedEmail() && (existing().email == request.auth.token.email || existing().applicantUid == request.auth.uid)
+      );
+      allow create: if isValidId(applicationId) &&
+        isValidApplication(incoming()) &&
+        incoming().id == applicationId &&
+        (isAdmin() || incoming().status == 'Submitted') &&
+        (!('applicantUid' in incoming()) || incoming().applicantUid == '' || (isSignedIn() && incoming().applicantUid == request.auth.uid));
+      allow update: if isValidId(applicationId) && isAdmin() && isValidApplication(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().jobId == existing().jobId;
+      allow delete: if isValidId(applicationId) && isAdmin();
     }
 
-    // 4. Certificates Collection
+    // 4. Certificates Collection (Public verification lookup, Admin approval gated)
     match /certificates/{certificateId} {
-      allow read: if true; // Public verification of authentic certificates
-      allow create: if true; // Direct candidate request
-      allow update, delete: if isAdmin();
+      allow get: if isValidId(certificateId);
+      allow list: if true;
+      allow create: if isValidId(certificateId) && isValidCertificate(incoming()) && incoming().id == certificateId && (
+        isAdmin() ||
+        incoming().status == 'Pending Approval'
+      );
+      allow update: if isValidId(certificateId) && isAdmin() && isValidCertificate(incoming()) && incoming().id == existing().id;
+      allow delete: if isValidId(certificateId) && isAdmin();
     }
 
-    // 5. Site Settings Collection
+    // 5. Site Settings Collection (Public read, Admin write)
     match /site_settings/{settingId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow get: if isValidId(settingId);
+      allow list: if true;
+      allow create, update: if isValidId(settingId) && isAdmin() && isValidSiteSettings(incoming());
+      allow delete: if isValidId(settingId) && isAdmin();
     }
   }
 }
